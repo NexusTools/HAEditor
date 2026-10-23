@@ -8,6 +8,7 @@ import { LayersDockPanel } from "./ui/panels/layers-dock-panel.js";
 import { SharedObjectsDockPanel } from "./ui/panels/shared-objects-dock-panel.js";
 import { LibraryDockPanel } from "./ui/panels/library-dock-panel.js";
 import { FiltersDockPanel } from "./ui/panels/filters-dock-panel.js";
+import { FontsDockPanel } from "./ui/panels/fonts-dock-panel.js";
 import { TimelineDockPanel } from "./ui/panels/timeline-dock-panel.js";
 import { AiAssistantDockPanel } from "./ui/panels/ai-assistant-dock-panel.js";
 import { EditorToolRegistry } from "./tools/abstract-editor-tool.js";
@@ -27,6 +28,7 @@ export class HaEditorApp extends AbstractUIComponent {
     public sharedObjectsPanel!: SharedObjectsDockPanel;
     public libraryPanel!: LibraryDockPanel;
     public layersPanel!: LayersDockPanel;
+    public fontsPanel!: FontsDockPanel;
     public filtersPanel!: FiltersDockPanel;
     public timelinePanel!: TimelineDockPanel;
 
@@ -272,9 +274,11 @@ export class HaEditorApp extends AbstractUIComponent {
         const workspaceRow = this.createElement("div", "ha-shell-workspace");
         const leftHost = this.createElement("aside", "ha-shell-left");
         const centerCol = this.createElement("main", "ha-shell-center");
+        const timelineHost = this.createElement("div", "ha-shell-timeline-host", undefined, {
+            id: "ha-timeline-top-host"
+        });
         const viewportHost = this.createElement("div", "ha-shell-viewport-host");
-        const timelineHost = this.createElement("div", "ha-shell-timeline-host");
-        centerCol.append(viewportHost, timelineHost);
+        centerCol.append(timelineHost, viewportHost);
 
         const rightDock = this.createElement("aside", "ha-shell-right-dock", undefined, {
             id: "ha-right-dock"
@@ -283,8 +287,9 @@ export class HaEditorApp extends AbstractUIComponent {
         const sharedObjectsHost = this.createElement("div", "ha-dock-slot");
         const libraryHost = this.createElement("div", "ha-dock-slot");
         const layersHost = this.createElement("div", "ha-dock-slot");
+        const fontsHost = this.createElement("div", "ha-dock-slot");
         const filtersHost = this.createElement("div", "ha-dock-slot");
-        rightDock.append(aiAssistantHost, sharedObjectsHost, libraryHost, layersHost, filtersHost);
+        rightDock.append(aiAssistantHost, sharedObjectsHost, libraryHost, layersHost, fontsHost, filtersHost);
 
         workspaceRow.append(leftHost, centerCol, rightDock);
 
@@ -312,8 +317,9 @@ export class HaEditorApp extends AbstractUIComponent {
         );
         this.libraryPanel = new LibraryDockPanel(libraryHost, this.state, this.contextMenu, this.modal);
         this.layersPanel = new LayersDockPanel(layersHost, this.state, this.contextMenu, this.modal);
+        this.fontsPanel = new FontsDockPanel(fontsHost, this.state, this.contextMenu, this.modal);
         this.filtersPanel = new FiltersDockPanel(filtersHost, this.state, this.contextMenu);
-        this.timelinePanel = new TimelineDockPanel(timelineHost, this.state, this.contextMenu);
+        this.timelinePanel = new TimelineDockPanel(timelineHost, this.state, this.contextMenu, this.modal);
         this.topMenuBar = new TopMenuBar(
             topHost,
             this.state,
@@ -344,6 +350,7 @@ export class HaEditorApp extends AbstractUIComponent {
         this.sharedObjectsPanel.render();
         this.libraryPanel.render();
         this.layersPanel.render();
+        this.fontsPanel.render();
         this.filtersPanel.render();
         this.timelinePanel.render();
         this.renderStatusBar();

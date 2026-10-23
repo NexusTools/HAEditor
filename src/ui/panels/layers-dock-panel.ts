@@ -45,7 +45,26 @@ export class LayersDockPanel extends AbstractDockPanel {
     }
 
     protected override getHeaderActions(): DockActionButton[] {
+        const cState = this.state.getCanvasState();
+        const previewOn = cState.previewDynamicFilters !== false;
         return [
+            {
+                id: "btn-toggle-canvas-filters-preview",
+                label: previewOn ? "FX:On" : "FX:Off",
+                icon: "✨",
+                title: "Toggle Dynamic Filters Preview On/Off (Exporting always renders attached filters)",
+                onClick: () => {
+                    this.state.ensureCanvasOpen();
+                    const next = this.state.engine.setTargetFiltersEnabled(this.state.canvasId, {
+                        targetType: "canvas"
+                    });
+                    this.state.setStatus(
+                        next
+                            ? "Dynamic Filters Preview enabled in viewport."
+                            : "Dynamic Filters Preview paused in viewport (exporting will still render attached filters)."
+                    );
+                }
+            },
             {
                 id: "btn-add-vector-layer",
                 label: "+Vec",
@@ -174,6 +193,35 @@ export class LayersDockPanel extends AbstractDockPanel {
         );
 
         const nameSpan = this.createElement("span", "ha-layer-name", layer.name);
+        const fxCount = (layer.attachedFilters || []).length;
+        const fxEnabled = layer.filtersEnabled !== false;
+        const fxBtn = this.createElement(
+            "button",
+            `ha-icon-btn ha-layer-fx-toggle ${fxCount > 0 ? "has-fx" : ""} ${fxEnabled ? "fx-on" : "fx-off"}`,
+            fxCount > 0 ? `✨${fxCount}` : "✨",
+            {
+                type: "button",
+                title:
+                    fxCount > 0
+                        ? `Layer has ${fxCount} attached dynamic filter(s) (${fxEnabled ? "Preview ON" : "Preview OFF"}) — Click to toggle all filters on/off for "${layer.name}"`
+                        : `Toggle dynamic filters on/off for "${layer.name}"`,
+                "data-layer-fx-id": layer.id
+            }
+        );
+        fxBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const next = this.state.engine.setTargetFiltersEnabled(this.state.canvasId, {
+                targetType: "layer",
+                targetId: layer.id,
+                sharedObjectId: this.state.activeSharedObjectId
+            });
+            this.state.setStatus(
+                next
+                    ? `Enabled dynamic filters preview on layer "${layer.name}".`
+                    : `Toggled off dynamic filters preview on layer "${layer.name}" (exporting still renders filters).`
+            );
+        });
+
         const infoSpan = this.createElement(
             "span",
             "ha-layer-meta",
@@ -182,7 +230,7 @@ export class LayersDockPanel extends AbstractDockPanel {
                 : `${Math.round(layer.opacity * 100)}%`
         );
 
-        row.append(visBtn, badge, nameSpan, infoSpan);
+        row.append(visBtn, badge, nameSpan, fxBtn, infoSpan);
 
         row.addEventListener("click", () => {
             this.state.activeLayerId = layer.id;

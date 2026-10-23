@@ -1021,6 +1021,284 @@
                   }
 
                   document.getElementById('ha-modal-cancel').click();
+
+                  // 6. Verify GIMP Format-Specific Export Settings Dialogs (PNG, JPEG, GIF, BMP, TGA, PPM, & Multi-Layer ICO)
+                  // 6a. PNG Export Settings Dialog
+                  runInMainWorld('window.haEditorApp.topMenuBar.openFormatExportSettingsDialog("test_export.png", "png");');
+                  const pngCompInput = document.querySelector('[data-field-key="compressionLevel"]');
+                  const pngFmtSel = document.querySelector('[data-field-key="pixelFormat"]');
+                  const pngBkgdSel = document.querySelector('[data-field-key="saveBackground"]');
+                  if (!pngCompInput || !pngFmtSel || !pngBkgdSel) {
+                    window.__testErrors.push('Expected PNG export settings dialog to show compressionLevel, pixelFormat, and saveBackground fields');
+                    return;
+                  }
+                  document.getElementById('ha-modal-cancel').click();
+
+                  // 6b. JPEG Export Settings Dialog (Quality)
+                  runInMainWorld('window.haEditorApp.topMenuBar.openFormatExportSettingsDialog("test_export.jpg", "jpg");');
+                  const jpgQualityInput = document.querySelector('[data-field-key="quality"]');
+                  const jpgSubsamplingSel = document.querySelector('[data-field-key="subsampling"]');
+                  if (!jpgQualityInput || !jpgSubsamplingSel) {
+                    window.__testErrors.push('Expected JPEG export settings dialog to show quality and subsampling fields');
+                    return;
+                  }
+                  document.getElementById('ha-modal-cancel').click();
+
+                  // 6c. Multi-Layer Windows Icon (.ICO) Export Settings Dialog (per-layer icon format, size, Compressed PNG)
+                  runInMainWorld('window.haEditorApp.topMenuBar.openFormatExportSettingsDialog("app_icon.ico", "ico");');
+                  const icoDialog = document.getElementById('ha-ico-export-dialog');
+                  const icoLayerList = document.getElementById('ha-ico-export-layer-list');
+                  const icoRows = icoLayerList ? icoLayerList.querySelectorAll('.ha-ico-layer-row') : [];
+                  if (!icoDialog || !icoLayerList || icoRows.length < 2) {
+                    window.__testErrors.push('Expected #ha-ico-export-dialog with per-layer rows in #ha-ico-export-layer-list (got ' + icoRows.length + ' rows)');
+                    return;
+                  }
+                  const firstRowBpp = icoRows[0].querySelector('[data-ico-layer-bpp]');
+                  const firstRowSize = icoRows[0].querySelector('[data-ico-layer-size]');
+                  const firstRowComp = icoRows[0].querySelector('[data-ico-layer-compressed]');
+                  if (!firstRowBpp || firstRowBpp.options.length !== 5 || !firstRowSize || !firstRowComp) {
+                    window.__testErrors.push('Expected each ICO layer row to have 5 GIMP bit-depth options, size dropdown, and Compressed (PNG) checkbox');
+                    return;
+                  }
+                  document.getElementById('ha-modal-cancel').click();
+                `
+              },
+              {
+                id: 'pdf_fonts_metadata_top_timeline_curves_and_vector_deform_dom',
+                name: 'Top Collapsible Timeline, Visual Curve Editor, Embedded Fonts Panel, Metadata Dialog, In-Place Text & Vector Deform Tool',
+                timeoutMs: 6000,
+                code: `
+                  function runInMainWorld(jsBody) {
+                    const s = document.createElement('script');
+                    s.textContent = '(function(){ ' + jsBody + ' })();';
+                    document.body.appendChild(s);
+                    s.remove();
+                  }
+
+                  // 1. Verify #ha-timeline-panel is docked at the TOP of .ha-shell-center (before .ha-shell-viewport-host) and collapsed by default
+                  const centerCol = document.querySelector('.ha-shell-center');
+                  const timelinePanel = document.getElementById('ha-timeline-panel');
+                  if (!centerCol || !timelinePanel) {
+                    window.__testErrors.push('Missing .ha-shell-center or #ha-timeline-panel');
+                    return;
+                  }
+                  if (!centerCol.firstElementChild || !centerCol.firstElementChild.contains(timelinePanel)) {
+                    window.__testErrors.push('Expected #ha-timeline-panel to be docked at the TOP (first child) of .ha-shell-center');
+                    return;
+                  }
+                  if (!timelinePanel.classList.contains('collapsed')) {
+                    window.__testErrors.push('Expected #ha-timeline-panel to be collapsed by default when canvas has 1 static frame');
+                    return;
+                  }
+
+                  // 2. Click +Frame (#btn-timeline-add-frame) -> verify timeline auto-expands and shows per-layer tracks & Loop node (#ha-timeline-loop-node)
+                  document.getElementById('btn-timeline-add-frame').click();
+                  const expandedTimeline = document.getElementById('ha-timeline-panel');
+                  const loopNode = document.getElementById('ha-timeline-loop-node');
+                  const tracksContainer = document.getElementById('ha-timeline-tracks-container');
+                  if (expandedTimeline.classList.contains('collapsed') || !loopNode || !tracksContainer) {
+                    window.__testErrors.push('Expected #ha-timeline-panel to expand and render #ha-timeline-loop-node and #ha-timeline-tracks-container after adding frame');
+                    return;
+                  }
+
+                  // 3. Open Visual Curve Editor (#btn-timeline-curve-editor) -> save a custom preset and close
+                  document.getElementById('btn-timeline-curve-editor').click();
+                  const curveDialog = document.getElementById('ha-curve-editor-dialog');
+                  const curveCanvas = document.getElementById('ha-curve-editor-canvas');
+                  const curvePresetSelect = document.getElementById('ha-curve-preset-select');
+                  const presetNameInput = document.getElementById('ha-curve-preset-name-input');
+                  const savePresetBtn = document.getElementById('ha-btn-save-curve-preset');
+                  const applyCurveBtn = document.getElementById('ha-btn-apply-curve');
+                  if (!curveDialog || !curveCanvas || !curvePresetSelect || !presetNameInput || !savePresetBtn || !applyCurveBtn) {
+                    window.__testErrors.push('Missing Visual Curve Editor controls (#ha-curve-editor-dialog, #ha-curve-editor-canvas, #ha-curve-preset-select, #ha-btn-save-curve-preset)');
+                    return;
+                  }
+                  presetNameInput.value = 'DOM Custom Bounce';
+                  savePresetBtn.click();
+                  applyCurveBtn.click();
+
+                  // 3b. Open Raster Keyframe Blend & JS Preset Editor (#btn-timeline-raster-blend-editor) -> verify built-in JS code is visible, validate & save custom JS preset, and apply
+                  const rblendBtn = document.getElementById('btn-timeline-raster-blend-editor');
+                  if (!rblendBtn) {
+                    window.__testErrors.push('Missing #btn-timeline-raster-blend-editor button in timeline header');
+                    return;
+                  }
+                  rblendBtn.click();
+                  const rblendDialog = document.getElementById('ha-raster-blend-dialog');
+                  const rblendPresetSel = document.getElementById('ha-rblend-preset-select');
+                  const rblendCodeEditor = document.getElementById('ha-rblend-code-editor');
+                  const rblendTargetLayerSel = document.getElementById('ha-rblend-target-layer-select');
+                  const rblendValidateBtn = document.getElementById('ha-btn-validate-rblend-code');
+                  const rblendSaveBtn = document.getElementById('ha-btn-save-rblend-preset');
+                  const rblendApplyBtn = document.getElementById('ha-btn-apply-rblend');
+                  const rblendNameInp = document.getElementById('ha-rblend-preset-name-input');
+                  if (!rblendDialog || !rblendPresetSel || !rblendCodeEditor || !rblendTargetLayerSel || !rblendValidateBtn || !rblendSaveBtn || !rblendApplyBtn || !rblendNameInp) {
+                    window.__testErrors.push('Missing Raster Blend & JS Preset Editor controls (#ha-raster-blend-dialog, #ha-rblend-code-editor, #ha-rblend-preset-select, #ha-rblend-target-layer-select)');
+                    return;
+                  }
+                  // Verify categorized transition folders in #ha-raster-blend-dialog
+                  const rblendCatSel = document.getElementById('ha-rblend-category-select');
+                  const rblendCatFolders = document.querySelectorAll('#ha-rblend-categories-tree .ha-rblend-category-folder');
+                  if (!rblendCatSel || rblendCatFolders.length < 5) {
+                    window.__testErrors.push('Expected categorized transition folders in #ha-raster-blend-dialog (got ' + rblendCatFolders.length + ')');
+                    return;
+                  }
+                  // Verify built-in preset JS source code is visible in the editor and syntax-highlighted via Prism.js
+                  if (!rblendCodeEditor.value || !rblendCodeEditor.value.includes('outBuf')) {
+                    window.__testErrors.push('Expected visible JavaScript source code in #ha-rblend-code-editor for built-in preset');
+                    return;
+                  }
+                  if (!document.querySelector('#ha-rblend-ide-mount .token.keyword')) {
+                    window.__testErrors.push('Expected Prism.js syntax highlighting tokens (.token.keyword) in #ha-rblend-ide-mount');
+                    return;
+                  }
+                  // Switch to another built-in preset (luma_wipe) and verify its visible JS source code updates
+                  rblendPresetSel.value = 'luma_wipe';
+                  rblendPresetSel.dispatchEvent(new Event('change', { bubbles: true }));
+                  if (!rblendCodeEditor.value.includes('luma')) {
+                    window.__testErrors.push('Expected #ha-rblend-code-editor to display luma_wipe JavaScript code when selected');
+                    return;
+                  }
+                  rblendValidateBtn.click();
+                  rblendNameInp.value = 'DOM Custom JS Wipe';
+                  rblendSaveBtn.click();
+                  rblendApplyBtn.click();
+
+                  // 3c. Verify Categorized GIMP Filter Folders in #ha-filters-panel & GIMP Filter Studio (#ha-gimp-filter-dialog) with Prism.js + Modifier+Click IDE
+                  const filterFolderNodes = document.querySelectorAll('#ha-filters-panel .ha-filter-category-folder');
+                  if (filterFolderNodes.length < 13) {
+                    window.__testErrors.push('Expected at least 13 GIMP filter folder categories in #ha-filters-panel (got ' + filterFolderNodes.length + ')');
+                    return;
+                  }
+                  const openStudioBtn = document.getElementById('btn-open-filter-js-studio');
+                  if (!openStudioBtn) {
+                    window.__testErrors.push('Missing #btn-open-filter-js-studio button in #ha-filters-panel');
+                    return;
+                  }
+                  openStudioBtn.click();
+
+                  const filterStudioDialog = document.getElementById('ha-gimp-filter-dialog');
+                  const filterStudioPresetSel = document.getElementById('ha-filter-studio-preset-select');
+                  const filterStudioIdeMount = document.getElementById('ha-filter-studio-ide-mount');
+                  const filterStudioNameInp = document.getElementById('ha-filter-preset-name-input');
+                  const filterStudioCatInp = document.getElementById('ha-filter-preset-category-input');
+                  const filterStudioSaveBtn = document.getElementById('ha-btn-save-filter-preset');
+                  const filterStudioApplyBtn = document.getElementById('ha-btn-apply-filter-studio');
+                  if (!filterStudioDialog || !filterStudioPresetSel || !filterStudioIdeMount || !filterStudioNameInp || !filterStudioCatInp || !filterStudioSaveBtn || !filterStudioApplyBtn) {
+                    window.__testErrors.push('Missing GIMP Filter Studio controls (#ha-gimp-filter-dialog, #ha-filter-studio-preset-select, #ha-filter-studio-ide-mount)');
+                    return;
+                  }
+                  if (!filterStudioIdeMount.querySelector('.token.keyword')) {
+                    window.__testErrors.push('Expected Prism.js syntax highlighting tokens (.token.keyword) inside #ha-filter-studio-ide-mount');
+                    return;
+                  }
+
+                  // Test Modifier+Click on internal function (helpers.perlin2d) -> opens #ha-ide-doc-popover with GIMP C source reference
+                  runInMainWorld('window.haEditorApp.filtersPanel.lastIdeEditor.triggerModifierClickOnSymbol("helpers.perlin2d");');
+                  const docPopover = document.getElementById('ha-ide-doc-popover');
+                  if (!docPopover || !docPopover.textContent.includes('helpers.perlin2d') || !docPopover.textContent.includes('GIMP C Source')) {
+                    window.__testErrors.push('Expected Modifier+Click on helpers.perlin2d to open #ha-ide-doc-popover with signature and GIMP C Source reference');
+                    return;
+                  }
+                  document.getElementById('ha-ide-doc-close').click();
+
+                  // Test Modifier+Click on user-defined function -> jumps to definition line
+                  runInMainWorld('const ed = window.haEditorApp.filtersPanel.lastIdeEditor; const nl = String.fromCharCode(10); ed.setCode(["function customSolarize(v) {", "  return 255 - v;", "}", "const total = width * height;", "for (let p = 0; p < total; p++) {", "  const i = p * 4;", "  outBuf[i] = customSolarize(srcBuf[i]);", "  outBuf[i+1] = srcBuf[i+1];", "  outBuf[i+2] = srcBuf[i+2];", "  outBuf[i+3] = srcBuf[i+3];", "}"].join(nl)); window.__ideJumpRes = ed.triggerModifierClickOnSymbol("customSolarize");');
+                  const defLineMarker = filterStudioIdeMount.querySelector('.ha-js-ide-gutter-line.ha-def-target');
+                  if (!defLineMarker || defLineMarker.getAttribute('data-line') !== '1') {
+                    window.__testErrors.push('Expected Modifier+Click on user-defined function customSolarize to highlight definition line 1');
+                    return;
+                  }
+
+                  filterStudioNameInp.value = 'DOM Custom Solarize';
+                  filterStudioCatInp.value = 'Colors';
+                  filterStudioSaveBtn.click();
+                  filterStudioApplyBtn.click();
+
+                  // 4. Verify Embedded Fonts Panel (#ha-fonts-panel) and +Font modal
+                  const fontsPanel = document.getElementById('ha-fonts-panel');
+                  const importFontBtn = document.getElementById('btn-import-embedded-font');
+                  if (!fontsPanel || !importFontBtn) {
+                    window.__testErrors.push('Missing #ha-fonts-panel or #btn-import-embedded-font');
+                    return;
+                  }
+                  importFontBtn.click();
+                  const fontFamInput = document.querySelector('#ha-modal-backdrop [data-field-key="fontFamily"]');
+                  if (!fontFamInput) {
+                    window.__testErrors.push('Expected +Font dialog to open with fontFamily input');
+                    return;
+                  }
+                  fontFamInput.value = 'HeadlineSerif';
+                  document.getElementById('ha-modal-submit').click();
+                  if (!document.querySelector('#ha-fonts-panel .ha-font-item')) {
+                    window.__testErrors.push('Expected embedded font item (.ha-font-item) to render in #ha-fonts-panel');
+                    return;
+                  }
+
+                  // 5. Verify Edit -> Document Metadata (EXIF / GPS / Author)... dialog (#ha-metadata-dialog)
+                  document.getElementById('menu-edit').click();
+                  const editMetaItem = document.getElementById('ha-menu-edit-metadata');
+                  if (!editMetaItem) {
+                    window.__testErrors.push('Missing #ha-menu-edit-metadata in Edit menu');
+                    return;
+                  }
+                  editMetaItem.click();
+                  const metaDialog = document.getElementById('ha-metadata-dialog');
+                  const authorInp = document.getElementById('ha-meta-author');
+                  const latInp = document.getElementById('ha-meta-lat');
+                  const lonInp = document.getElementById('ha-meta-lon');
+                  const saveMetaBtn = document.getElementById('ha-btn-save-metadata');
+                  if (!metaDialog || !authorInp || !latInp || !lonInp || !saveMetaBtn) {
+                    window.__testErrors.push('Missing #ha-metadata-dialog or metadata inputs');
+                    return;
+                  }
+                  authorInp.value = 'Studio Artist';
+                  latInp.value = '37.7749';
+                  lonInp.value = '-122.4194';
+                  saveMetaBtn.click();
+
+                  // 6. Verify Vector Deform Tool (#tool-btn-vector_deform) and In-Place Text Editor (#ha-inplace-text-editor)
+                  const vecLayerRow = document.querySelector('#ha-layers-panel .ha-layer-row[data-layer-id="layer_2"]');
+                  if (vecLayerRow) vecLayerRow.click();
+                  const deformBtn = document.getElementById('tool-btn-vector_deform');
+                  if (!deformBtn) {
+                    window.__testErrors.push('Missing #tool-btn-vector_deform in vector toolbox');
+                    return;
+                  }
+                  deformBtn.click();
+
+                  runInMainWorld('const t = window.haEditorApp.state.engine.drawText(window.haEditorApp.state.canvasId, "layer_2", { x: 80, y: 80, text: "Editable PDF Text", fontFamily: "HeadlineSerif", fontSize: 22, fill: "#ffffff" }); window.haEditorApp.viewport.openInPlaceTextEditor(t.id);');
+                  const inplaceTextarea = document.getElementById('ha-inplace-text-editor');
+                  if (!inplaceTextarea || inplaceTextarea.value !== 'Editable PDF Text') {
+                    window.__testErrors.push('Expected #ha-inplace-text-editor to open over text object with initial text');
+                    return;
+                  }
+                  inplaceTextarea.value = 'Edited In-Place Text!';
+                  inplaceTextarea.blur();
+
+                  // 7. Verify Non-Destructive Dynamic Filter Attachment & Preview Toggle UI in #ha-filters-panel & #ha-layers-panel
+                  const filterTargetSel = document.getElementById('ha-filter-target-select');
+                  const attachDynBtn = document.getElementById('btn-attach-filter-dynamically');
+                  const toggleLayerFxBtn = document.getElementById('btn-toggle-layer-filters-enabled');
+                  const toggleCanvasFxBtn = document.getElementById('btn-toggle-canvas-filters-preview');
+                  if (!filterTargetSel || !attachDynBtn || !toggleLayerFxBtn || !toggleCanvasFxBtn) {
+                    window.__testErrors.push('Missing dynamic filter controls (#ha-filter-target-select, #btn-attach-filter-dynamically, #btn-toggle-layer-filters-enabled, #btn-toggle-canvas-filters-preview)');
+                    return;
+                  }
+                  attachDynBtn.click();
+                  const attachedStackItem = document.querySelector('#ha-attached-filters-stack .ha-attached-filter-item');
+                  if (!attachedStackItem) {
+                    window.__testErrors.push('Expected attached filter item (.ha-attached-filter-item) to render in #ha-attached-filters-stack after clicking #btn-attach-filter-dynamically');
+                    return;
+                  }
+                  const layerRowFxBtn = document.querySelector('#ha-layers-panel .ha-layer-fx-toggle');
+                  if (!layerRowFxBtn) {
+                    window.__testErrors.push('Expected .ha-layer-fx-toggle badge on layer row in #ha-layers-panel');
+                    return;
+                  }
+                  layerRowFxBtn.click();
+                  toggleCanvasFxBtn.click();
+                  toggleCanvasFxBtn.click();
                 `
               }
             ];

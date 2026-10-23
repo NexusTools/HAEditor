@@ -41,6 +41,9 @@ export class CanvasViewport extends AbstractUIComponent {
         this.modal = modal;
         this.onNewCanvas = onNewCanvas;
         this.onOpenFile = onOpenFile;
+        this.state.inPlaceTextEditHandler = (objectId: string) => {
+            this.openInPlaceTextEditor(objectId);
+        };
         this.render();
     }
 
@@ -641,7 +644,59 @@ export class CanvasViewport extends AbstractUIComponent {
             );
         } else if (hitObj) {
             this.state.selectedObjectIds = [hitObj.id];
+            if (hitObj.kind === "text") {
+                menu.push({
+                    label: `Edit Text "${(hitObj.text || "").slice(0, 20)}" In-Place`,
+                    icon: "🔤",
+                    action: () => this.openInPlaceTextEditor(hitObj.id)
+                });
+            }
             menu.push(
+                {
+                    label: "Deform / Bend Vector Curve (K)",
+                    icon: "〰️",
+                    shortcut: "K",
+                    action: () => {
+                        this.state.activeToolId = "vector_deform";
+                        this.state.setStatus(`Switched to Vector Deform Tool for "${hitObj.id}".`);
+                        this.state.notify();
+                    }
+                },
+                {
+                    label: "Skew Vector Object (skewX / skewY)...",
+                    icon: "▱",
+                    action: () => {
+                        this.modal.openFormDialog({
+                            title: `Skew Vector Object "${hitObj.id}"`,
+                            fields: [
+                                {
+                                    key: "skewX",
+                                    label: "Horizontal Skew X (deg)",
+                                    type: "number",
+                                    defaultValue: String(hitObj.skewX || 0)
+                                },
+                                {
+                                    key: "skewY",
+                                    label: "Vertical Skew Y (deg)",
+                                    type: "number",
+                                    defaultValue: String(hitObj.skewY || 0)
+                                }
+                            ],
+                            submitLabel: "Apply Skew",
+                            onSubmit: (vals) => {
+                                const sx = Number(vals.skewX) || 0;
+                                const sy = Number(vals.skewY) || 0;
+                                this.state.engine.modifyObject(
+                                    this.state.canvasId,
+                                    hitObj.id,
+                                    { skewX: sx, skewY: sy }
+                                );
+                                this.state.setStatus(`Skewed "${hitObj.id}" to (${sx}°, ${sy}°).`);
+                                this.state.notify();
+                            }
+                        });
+                    }
+                },
                 {
                     label: `Convert "${hitObj.id}" into New Shared Object...`,
                     icon: "🧩",
@@ -836,5 +891,113 @@ export class CanvasViewport extends AbstractUIComponent {
                 this.state.setStatus(`Converted "${obj.id}" into Shared Object "${shared.name}".`);
             }
         });
+    }
+
+    /**
+     * Opens an interactive floating in-place text editor (`#ha-inplace-text-editor`)
+     * directly over a `"text"` vector object on the canvas, preserving its font family,
+     * font size, weight, style, color, and position.
+     */
+    public openInPlaceTextEditor(objectId: string): void {
+        if (!this.stageWrapperEl) return;
+        const existing = this.stageWrapperEl.querySelector("#ha-inplace-text-editor");
+        if (existing) {
+            existing.remove();
+        }
+
+        const cState = this.state.getCanvasState();
+        const layers = this.state.getActiveContainerLayers();
+        let targetObj: any = null;
+        for (const layer of layers) {
+            if (layer.type !== "vector") continue;
+            const found = layer.objects.find((o: any) => o.id === objectId && o.kind === "text");
+            if (found) {
+                targetObj = found;
+                break;
+            }
+        }
+        if (!targetObj) return;
+
+        const bbox = this.state.engine.computeObjectBoundingBox(targetObj, cState);
+        const offsetX =
+            this.state.editMode === "in_place" && this.state.inPlaceContext
+                ? this.state.inPlaceContext.x
+                : 0;
+        const offsetY =
+            this.state.editMode === "in_place" && this.state.inPlaceContext
+                ? this.state.inPlaceContext.y
+                : 0;
+
+        const zoom = this.state.zoom || 1;
+        const leftPx = Math.max(0, Math.round((bbox.x + offsetX) * zoom));
+        const topPx = Math.max(0, Math.round((bbox.y + offsetY) * zoom));
+        const widthPx = Math.max(120, Math.round((bbox.width + 40) * zoom));
+        const heightPx = Math.max(32, Math.round((bbox.height + 16) * zoom));
+        const fontSizePx = Math.max(10, Math.round((targetObj.fontSize || 24) * zoom));
+
+        const textarea = this.createElement("textarea", "ha-inplace-text-editor", undefined, {
+            id: "ha-inplace-text-editor",
+            "data-object-id": targetObj.id
+        }) as HTMLTextAreaElement;
+
+        textarea.value = targetObj.text || "";
+        textarea.style.position = "absolute";
+        textarea.style.left = `${leftPx}px`;
+        textarea.style.top = `${topPx}px`;
+        textarea.style.width = `${widthPx}px`;
+        textarea.style.minHeight = `${heightPx}px`;
+        textarea.style.fontFamily = targetObj.fontFamily || "sans-serif";
+        textarea.style.fontSize = `${fontSizePx}px`;
+        textarea.style.fontWeight = targetObj.fontWeight || "normal";
+        textarea.style.fontStyle = targetObj.fontStyle || "normal";
+        textarea.style.color =
+            targetObj.fill && targetObj.fill !== "none" ? targetObj.fill : "#ffffff";
+        if (targetObj.letterSpacing) {
+            textarea.style.letterSpacing = `${targetObj.letterSpacing * zoom}px`;
+        }
+        textarea.style.zIndex = "50";
+
+        this.state.setEditingObject(targetObj.id, true);
+        this.drawCompositedFrame();
+
+        let committed = false;
+        const commit = () => {
+            if (committed) return;
+            committed = true;
+            this.state.setEditingObject(undefined, false);
+            const nextText = textarea.value;
+            textarea.remove();
+            if (nextText !== targetObj.text) {
+                this.state.engine.modifyObject(
+                    this.state.canvasId,
+                    targetObj.id,
+                    { text: nextText }
+                );
+                this.state.setStatus(`Updated text object "${targetObj.id}" in-place.`);
+            }
+            this.state.notify();
+        };
+
+        textarea.addEventListener("keydown", (ev: KeyboardEvent) => {
+            ev.stopPropagation();
+            if (ev.key === "Escape") {
+                committed = true;
+                this.state.setEditingObject(undefined, false);
+                textarea.remove();
+                this.state.setStatus("Cancelled in-place text edit.");
+                this.state.notify();
+            } else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey || !ev.shiftKey)) {
+                ev.preventDefault();
+                commit();
+            }
+        });
+
+        textarea.addEventListener("blur", () => {
+            commit();
+        });
+
+        this.stageWrapperEl.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
     }
 }
