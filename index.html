@@ -10,28 +10,63 @@
   <div id="app-root"></div>
   <script>
     (function () {
+      const fs = require('fs');
+      const path = require('path');
+
+      function bringWindowToFront() {
+        try {
+          if (window.location.protocol === 'chrome-extension:' && typeof nw !== 'undefined' && nw.Window && nw.Window.get) {
+            const win = nw.Window.get();
+            win.show();
+            if (typeof win.restore === 'function') {
+              win.restore();
+            }
+            if (typeof win.setAlwaysOnTop === 'function') {
+              win.setAlwaysOnTop(true);
+            }
+            win.focus();
+            setTimeout(() => {
+              try {
+                if (typeof win.setAlwaysOnTop === 'function') {
+                  win.setAlwaysOnTop(false);
+                }
+                win.focus();
+              } catch (_e) {}
+            }, 250);
+          }
+        } catch (_e) {}
+      }
+
+      bringWindowToFront();
+      window.addEventListener('load', bringWindowToFront);
       try {
-        if (window.location.protocol === 'chrome-extension:' && typeof nw !== 'undefined' && nw.Window && nw.Window.get) {
-          const win = nw.Window.get();
-          win.show();
-          win.focus();
+        if (window.location.protocol === 'chrome-extension:' && typeof nw !== 'undefined' && nw.App && typeof nw.App.on === 'function') {
+          nw.App.on('open', function () {
+            bringWindowToFront();
+          });
         }
       } catch (_e) {}
 
-      const fs = require('fs');
-      const path = require('path');
-      const startDir = (typeof nw !== 'undefined' && nw.App && nw.App.startPath) ? nw.App.startPath : process.cwd();
-      const candidates = [
-        path.resolve(startDir, 'dist/src/haeditor-app.js'),
-        path.resolve(process.cwd(), 'dist/src/haeditor-app.js'),
-        path.resolve(process.cwd(), '../dist/src/haeditor-app.js')
-      ];
-      const appPath = candidates.find((p) => fs.existsSync(p)) || './dist/src/haeditor-app.js';
-      const projectRoot = path.dirname(path.dirname(path.dirname(appPath)));
-      const params = new URLSearchParams(window.location.search || '');
-      const customProjectRoot = params.get('projectRoot') || projectRoot;
-      const customConfigDir = params.get('configDir') || undefined;
-      require(appPath).startHaEditorApp(window, customProjectRoot, customConfigDir);
+      try {
+        const startDir = (typeof nw !== 'undefined' && nw.App && nw.App.startPath) ? nw.App.startPath : process.cwd();
+        const candidates = [
+          path.resolve(startDir, 'dist/src/haeditor-app.js'),
+          path.resolve(process.cwd(), 'dist/src/haeditor-app.js'),
+          path.resolve(process.cwd(), '../dist/src/haeditor-app.js')
+        ];
+        const appPath = candidates.find((p) => fs.existsSync(p)) || './dist/src/haeditor-app.js';
+        const projectRoot = path.dirname(path.dirname(path.dirname(appPath)));
+        const params = new URLSearchParams(window.location.search || '');
+        const customProjectRoot = params.get('projectRoot') || projectRoot;
+        const customConfigDir = params.get('configDir') || undefined;
+        require(appPath).startHaEditorApp(window, customProjectRoot, customConfigDir);
+        bringWindowToFront();
+      } catch (err) {
+        try {
+          fs.writeFileSync(path.join(process.cwd(), 'startup-error.log'), String(err && err.stack ? err.stack : err));
+        } catch (_e) {}
+        console.error('HAEditor startup error:', err);
+      }
     })();
   </script>
 </body>
