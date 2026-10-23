@@ -289,10 +289,10 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     ]
                 },
                 {
-                    key: "customClaudeUrl",
+                    key: "customClaudeBaseUrl",
                     label: "Custom Anthropic Claude Endpoint URL",
                     type: "text",
-                    defaultValue: cfg.customClaudeUrl || "https://api.anthropic.com",
+                    defaultValue: cfg.customClaudeBaseUrl || "https://api.anthropic.com",
                     placeholder: "https://api.anthropic.com",
                     visibleWhen: { fieldKey: "activeProvider", equals: "custom-claude" }
                 },
@@ -384,7 +384,7 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     openaiModel: (vals.openaiModel || "gpt-4o").trim(),
                     claudeApiKey: (vals.claudeApiKey || "").trim(),
                     claudeModel: (vals.claudeModel || "claude-3-7-sonnet-latest").trim(),
-                    customClaudeUrl: (vals.customClaudeUrl || "https://api.anthropic.com").trim(),
+                    customClaudeBaseUrl: (vals.customClaudeBaseUrl || "https://api.anthropic.com").trim(),
                     geminiApiKey: (vals.geminiApiKey || "").trim(),
                     geminiModel: (vals.geminiModel || "gemini-2.5-pro").trim(),
                     grokApiKey: (vals.grokApiKey || "").trim(),

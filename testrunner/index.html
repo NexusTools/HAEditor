@@ -71,12 +71,15 @@
     (function() {
       const http = require('http');
       const fs = require('fs');
+      const os = require('os');
       const path = require('path');
 
       const cwd = process.cwd();
       const projectRootDir = fs.existsSync(path.join(cwd, 'dist', 'src', 'haeditor-app.js'))
         ? cwd
         : path.resolve(cwd, '..');
+      const testSandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'haeditor-webview-test-'));
+      const testConfigDir = path.join(testSandboxDir, 'os-config');
       const testResultsDir = path.join(projectRootDir, 'testrunner', 'test-results');
       fs.mkdirSync(testResultsDir, { recursive: true });
       const testLogPath = path.join(testResultsDir, 'desktop-tests.log');
@@ -138,6 +141,12 @@
           } catch (e) {
             console.error('Failed to write desktop-tests.log:', e);
           }
+
+          try {
+            if (testSandboxDir && fs.existsSync(testSandboxDir)) {
+              fs.rmSync(testSandboxDir, { recursive: true, force: true });
+            }
+          } catch (_e) {}
 
           const exitCode = (errorLogs.length > 0 || totalFailed > 0) ? 1 : 0;
           console.log(`Test runner exiting with code ${exitCode}`);
@@ -301,7 +310,7 @@
 
         testServer.listen(0, '127.0.0.1', () => {
           const port = testServer.address().port;
-          webview.src = `http://127.0.0.1:${port}/index.html`;
+          webview.src = `http://127.0.0.1:${port}/index.html?projectRoot=${encodeURIComponent(testSandboxDir)}&configDir=${encodeURIComponent(testConfigDir)}`;
         });
 
         function execScriptWithTimeout(code, timeoutMs = 1500) {

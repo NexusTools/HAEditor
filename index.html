@@ -28,7 +28,10 @@
       ];
       const appPath = candidates.find((p) => fs.existsSync(p)) || './dist/src/haeditor-app.js';
       const projectRoot = path.dirname(path.dirname(path.dirname(appPath)));
-      require(appPath).startHaEditorApp(window, projectRoot);
+      const params = new URLSearchParams(window.location.search || '');
+      const customProjectRoot = params.get('projectRoot') || projectRoot;
+      const customConfigDir = params.get('configDir') || undefined;
+      require(appPath).startHaEditorApp(window, customProjectRoot, customConfigDir);
     })();
   </script>
 </body>
