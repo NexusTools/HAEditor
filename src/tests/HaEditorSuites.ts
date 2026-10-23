@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as http from "http";
 import * as os from "os";
 import * as path from "path";
 import * as zlib from "zlib";
@@ -11,6 +12,7 @@ import {
     AbstractImageCodec,
     AiCodec,
     parseAiBuffer,
+    encodeRgbaToPng,
     HaEditorConfigManager,
     SharedObjectLibrary,
     parseSharedObjectCategory,
@@ -627,6 +629,87 @@ export function registerHaEditorTestSuites(runner: TestRunner): void {
                 expect(options.some(o => o.value === "test-custom-llm")).toBe(true);
             } finally {
                 AiProviderRegistry.unregisterProvider("test-custom-llm");
+            }
+        });
+
+        suite.it("fetches image from clipboard URL on paste and shows error dialogs for failed URL or empty clipboard", async () => {
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "haeditor-clip-url-"));
+            const pngW = 48;
+            const pngH = 36;
+            const rgba = Buffer.alloc(pngW * pngH * 4);
+            for (let i = 0; i < pngW * pngH; i++) {
+                rgba[i * 4] = 20;
+                rgba[i * 4 + 1] = 200;
+                rgba[i * 4 + 2] = 255;
+                rgba[i * 4 + 3] = 255;
+            }
+            const validPngBuf = encodeRgbaToPng(pngW, pngH, rgba);
+
+            const server = http.createServer((req, res) => {
+                if (req.url && req.url.startsWith("/valid-image.png")) {
+                    res.writeHead(200, { "Content-Type": "image/png" });
+                    res.end(validPngBuf);
+                } else if (req.url && req.url.startsWith("/webpage")) {
+                    res.writeHead(200, { "Content-Type": "text/html" });
+                    res.end("<!DOCTYPE html><html><body>Not an image</body></html>");
+                } else {
+                    res.writeHead(404, { "Content-Type": "text/plain" });
+                    res.end("Not Found");
+                }
+            });
+
+            await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+            const port = (server.address() as any).port;
+
+            try {
+                const state = new EditorSessionState(tmpDir, path.join(tmpDir, "config"));
+                const errorsShown: Array<{ title: string; message: string; details?: string }> = [];
+                state.errorDialogHandler = (title, message, details) => {
+                    errorsShown.push({ title, message, details });
+                };
+
+                // 1. Genuinely empty clipboard -> shows "Clipboard Is Empty" error dialog
+                state.clipboard = null;
+                state.systemClipboardOverride = { text: "" };
+                const emptyRes = await state.pasteAsync("new_image");
+                expect(emptyRes).toBe(false);
+                expect(errorsShown.length).toBe(1);
+                expect(errorsShown[0].title).toContain("Clipboard Is Empty");
+
+                // 2. Broken image URL (HTTP 404) -> shows "Failed to Fetch Image from Clipboard URL" error dialog
+                state.clipboard = null;
+                state.systemClipboardOverride = { text: `http://127.0.0.1:${port}/missing.png` };
+                const brokenRes = await state.pasteAsync("new_image");
+                expect(brokenRes).toBe(false);
+                expect(errorsShown.length).toBe(2);
+                expect(errorsShown[1].title).toContain("Failed to Fetch Image");
+
+                // 3. HTML webpage URL -> fails image decode and shows error dialog
+                state.clipboard = null;
+                state.systemClipboardOverride = { text: `http://127.0.0.1:${port}/webpage` };
+                const htmlRes = await state.pasteAsync("new_layer");
+                expect(htmlRes).toBe(false);
+                expect(errorsShown.length).toBe(3);
+
+                // 4. Valid image URL -> Paste as New Image creates canvas of image dimensions (48x36)
+                state.clipboard = null;
+                state.systemClipboardOverride = { text: `http://127.0.0.1:${port}/valid-image.png` };
+                const newImgOk = await state.pasteAsync("new_image");
+                expect(newImgOk).toBe(true);
+                expect(state.hasOpenCanvas).toBe(true);
+                expect(state.getCanvasState().width).toBe(pngW);
+                expect(state.getCanvasState().height).toBe(pngH);
+
+                // 5. Valid image URL -> Paste as New Layer appends a new raster layer with the fetched image
+                const layersBefore = state.getCanvasState().layers.length;
+                state.clipboard = null;
+                state.systemClipboardOverride = { text: `http://127.0.0.1:${port}/valid-image.png?layer=2` };
+                const newLayerOk = await state.pasteAsync("new_layer");
+                expect(newLayerOk).toBe(true);
+                expect(state.getCanvasState().layers.length).toBe(layersBefore + 1);
+            } finally {
+                await new Promise<void>((resolve) => server.close(() => resolve()));
+                fs.rmSync(tmpDir, { recursive: true, force: true });
             }
         });
     });

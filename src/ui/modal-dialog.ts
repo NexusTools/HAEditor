@@ -23,6 +23,12 @@ export interface FormPresetOption {
     values: Record<string, string>;
 }
 
+export interface ErrorDialogOptions {
+    title: string;
+    message: string;
+    details?: string;
+}
+
 export interface FileFilterOption {
     label: string;
     extensions: string[]; // empty array = all files (*.*)
@@ -759,6 +765,72 @@ export class ModalDialogManager extends AbstractUIComponent {
                 (firstFocusable as HTMLInputElement).select();
             }
         }
+    }
+
+    /**
+     * Opens an Error / Alert Modal Dialog (`#ha-error-dialog`) when an operation fails
+     * (such as pasting from an empty clipboard or failing to fetch an image from a clipboard URL).
+     */
+    public openErrorDialog(options: ErrorDialogOptions): void {
+        this.closeDialog();
+
+        const backdrop = this.createElement("div", "ha-modal-backdrop", undefined, {
+            id: "ha-modal-backdrop"
+        });
+        const card = this.createElement("div", "ha-modal-card ha-error-modal-card", undefined, {
+            id: "ha-error-dialog",
+            role: "alertdialog",
+            "aria-modal": "true"
+        });
+
+        const header = this.createElement("div", "ha-modal-header ha-fb-header");
+        const titleSpan = this.createElement("span", "ha-error-dialog-title", `⚠️ ${options.title}`, {
+            id: "ha-error-dialog-title"
+        });
+        const closeXBtn = this.createElement("button", "ha-icon-btn", "✕", {
+            id: "ha-error-close-x",
+            title: "Close (Esc)",
+            type: "button"
+        });
+        closeXBtn.addEventListener("click", () => this.closeDialog());
+        header.append(titleSpan, closeXBtn);
+
+        const body = this.createElement("div", "ha-modal-body");
+        const msgBox = this.createElement("div", "ha-error-dialog-message", options.message, {
+            id: "ha-error-dialog-message",
+            style: "white-space: pre-wrap; word-break: break-word; color: #f0f4ff; font-size: 13px; line-height: 1.5; padding: 10px 12px; background: rgba(255, 77, 109, 0.12); border: 1px solid rgba(255, 77, 109, 0.4); border-radius: 6px;"
+        });
+        body.appendChild(msgBox);
+
+        if (options.details) {
+            const detailsBox = this.createElement("div", "ha-error-dialog-details", options.details, {
+                id: "ha-error-dialog-details",
+                style: "margin-top: 10px; padding: 8px 10px; background: #10121b; border: 1px solid #2b2f42; border-radius: 5px; font-family: monospace; font-size: 11px; color: #ff8fa3; white-space: pre-wrap; word-break: break-all; max-height: 140px; overflow-y: auto;"
+            });
+            body.appendChild(detailsBox);
+        }
+
+        const footer = this.createElement("div", "ha-modal-footer");
+        const okBtn = this.createElement("button", "ha-btn ha-btn-primary", "OK", {
+            id: "ha-error-dialog-ok",
+            type: "button"
+        });
+        okBtn.addEventListener("click", () => this.closeDialog());
+
+        card.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === "Escape") {
+                e.preventDefault();
+                this.closeDialog();
+            }
+        });
+
+        footer.appendChild(okBtn);
+        card.append(header, body, footer);
+        backdrop.appendChild(card);
+        this.containerEl.appendChild(backdrop);
+        this.activeBackdrop = backdrop;
+
+        okBtn.focus();
     }
 
     public closeDialog(): void {

@@ -196,6 +196,21 @@
             return;
           }
 
+          if (req.method === 'GET' && reqPath === '/v1/test-clipboard-image.png') {
+            const { encodeRgbaToPng } = require('@nexustools/hacanvas');
+            const w = 48, h = 36;
+            const rgba = Buffer.alloc(w * h * 4, 220);
+            res.writeHead(200, { 'Content-Type': 'image/png', 'Access-Control-Allow-Origin': '*' });
+            res.end(encodeRgbaToPng(w, h, rgba));
+            return;
+          }
+
+          if (req.method === 'GET' && reqPath === '/v1/test-clipboard-broken.png') {
+            res.writeHead(404, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+            res.end('Image Not Found');
+            return;
+          }
+
           if (req.method === 'POST' && reqPath === '/v1/chat/completions') {
             let body = '';
             req.on('data', chunk => (body += chunk.toString()));
@@ -849,6 +864,65 @@
                   if (!toolbox || toolbox.getAttribute('data-toolbox-context') !== 'vector' || !document.getElementById('tool-btn-vector_select')) {
                     window.__testErrors.push('Expected left toolbox to return to vector tools after clicking vector layer');
                   }
+                `
+              },
+              {
+                id: 'clipboard_url_image_fetch_and_error_dialogs',
+                name: 'Clipboard URL Image Fetching & Empty/Failed Clipboard Error Dialogs',
+                timeoutMs: 6000,
+                code: `
+                  function runInMainWorld(jsBody) {
+                    const s = document.createElement('script');
+                    s.textContent = '(function(){ ' + jsBody + ' })();';
+                    document.body.appendChild(s);
+                    s.remove();
+                  }
+
+                  // 1. Genuinely empty clipboard -> must show #ha-error-dialog ("Clipboard Is Empty")
+                  runInMainWorld('window.haEditorApp.state.clipboard = null; window.haEditorApp.state.systemClipboardOverride = { text: "" }; window.haEditorApp.state.paste("new_image");');
+
+                  let errDialog = document.getElementById('ha-error-dialog');
+                  let errTitle = document.getElementById('ha-error-dialog-title');
+                  if (!errDialog || !errTitle || !errTitle.textContent.includes('Clipboard Is Empty')) {
+                    window.__testErrors.push('Expected #ha-error-dialog with title "Clipboard Is Empty" when clipboard is empty');
+                    return;
+                  }
+                  document.getElementById('ha-error-dialog-ok').click();
+                  if (document.getElementById('ha-error-dialog')) {
+                    window.__testErrors.push('Expected clicking #ha-error-dialog-ok to close the error dialog');
+                  }
+
+                  // 2. Broken URL (HTTP 404) -> must show #ha-error-dialog ("Failed to Fetch Image from Clipboard URL")
+                  const origin = window.location.origin;
+                  runInMainWorld('window.haEditorApp.state.clipboard = null; window.haEditorApp.state.systemClipboardOverride = { text: "' + origin + '/v1/test-clipboard-broken.png" }; window.haEditorApp.state.paste("new_image");');
+
+                  for (let i = 0; i < 30; i++) {
+                    if (document.getElementById('ha-error-dialog')) break;
+                    await new Promise(r => setTimeout(r, 80));
+                  }
+                  errDialog = document.getElementById('ha-error-dialog');
+                  errTitle = document.getElementById('ha-error-dialog-title');
+                  if (!errDialog || !errTitle || !errTitle.textContent.includes('Failed to Fetch Image')) {
+                    window.__testErrors.push('Expected #ha-error-dialog with "Failed to Fetch Image" when clipboard URL returns HTTP 404');
+                    return;
+                  }
+                  document.getElementById('ha-error-dialog-ok').click();
+
+                  // 3. Valid image URL -> Paste as New Layer creates a new raster layer in #ha-layers-panel
+                  const layersBefore = document.querySelectorAll('#ha-layers-panel .ha-layer-row').length;
+                  runInMainWorld('window.haEditorApp.state.clipboard = null; window.haEditorApp.state.systemClipboardOverride = { text: "' + origin + '/v1/test-clipboard-image.png" }; window.haEditorApp.state.paste("new_layer");');
+
+                  let layersAfter = layersBefore;
+                  for (let i = 0; i < 30; i++) {
+                    layersAfter = document.querySelectorAll('#ha-layers-panel .ha-layer-row').length;
+                    if (layersAfter === layersBefore + 1) break;
+                    await new Promise(r => setTimeout(r, 80));
+                  }
+                  if (layersAfter !== layersBefore + 1) {
+                    window.__testErrors.push('Expected new layer in #ha-layers-panel after pasting valid image URL as new layer (expected ' + (layersBefore + 1) + ', got ' + layersAfter + ')');
+                  }
+
+                  runInMainWorld('window.haEditorApp.state.systemClipboardOverride = undefined;');
                 `
               }
             ];

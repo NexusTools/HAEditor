@@ -37,6 +37,9 @@ export class HaEditorApp extends AbstractUIComponent {
         this.state = new EditorSessionState(projectRoot, configDir);
         this.contextMenu = new ContextMenuManager(this.doc.body);
         this.modal = new ModalDialogManager(this.doc.body);
+        this.state.errorDialogHandler = (title, message, details) => {
+            this.modal.openErrorDialog({ title, message, details });
+        };
 
         // Start completely blank (no default image, no default shared objects, no open tabs)
         try {

@@ -1,12 +1,19 @@
+import * as fs from "fs";
+import * as http from "http";
+import * as https from "https";
+import * as path from "path";
+import { fileURLToPath } from "url";
 import {
     HybridArtEngine,
     HaEditorConfigManager,
     SharedObjectLibrary,
+    ImageCodecRegistry,
     type ArtCanvasState,
     type ArtLayerSpec,
     type SharedObjectCanvasSpec,
     type VectorObjectSpec
 } from "@nexustools/hacanvas";
+import { AbstractUIComponent } from "../ui/abstract-ui-component.js";
 
 /**
  * Abstract observable state class that shares subscription notification and batching across state managers.
@@ -155,6 +162,10 @@ export class EditorSessionState extends AbstractObservableState {
     // GIMP Clipboard & Named Buffers
     public clipboard: EditorClipboardBuffer | null = null;
     public readonly namedBuffers: Map<string, EditorClipboardBuffer> = new Map();
+    public systemClipboardOverride?: { text?: string; imageDataUri?: string } | null;
+    private lastCopiedSystemText: string | null = null;
+    public lastPastePromise: Promise<boolean> = Promise.resolve(false);
+    public errorDialogHandler: ((title: string, message: string, details?: string) => void) | null = null;
 
     // GIMP Filter Repeat History
     public lastFilterUsed: { filterType: any; displayName: string; params: Record<string, any> } | null = null;
@@ -382,6 +393,7 @@ export class EditorSessionState extends AbstractObservableState {
                     this.setStatus(`Copied ${copiedObjs.length} vector object(s) to named buffer "${bufferName}".`);
                 } else {
                     this.clipboard = clip;
+                    this.lastCopiedSystemText = this.readSystemClipboard().text;
                     this.setStatus(`Copied ${copiedObjs.length} vector object(s) to clipboard (Ctrl+C).`);
                 }
                 return true;
@@ -410,6 +422,7 @@ export class EditorSessionState extends AbstractObservableState {
             this.setStatus(`Copied ${clip.width}×${clip.height}px region to named buffer "${bufferName}".`);
         } else {
             this.clipboard = clip;
+            this.lastCopiedSystemText = this.readSystemClipboard().text;
             this.setStatus(
                 visibleComposite
                     ? `Copied visible region (${clip.width}×${clip.height}px) to clipboard (Ctrl+Shift+C).`
@@ -441,6 +454,116 @@ export class EditorSessionState extends AbstractObservableState {
         });
     }
 
+    public showError(title: string, message: string, details?: string): void {
+        this.setStatus(`Error: ${title} — ${message}${details ? " (" + details + ")" : ""}`);
+        if (this.errorDialogHandler) {
+            this.errorDialogHandler(title, message, details);
+        }
+    }
+
+    /**
+     * Reads text and/or raw image data from the OS system clipboard (`nw.Clipboard.get()`)
+     * or returns `this.systemClipboardOverride` when set (e.g. in tests).
+     */
+    public readSystemClipboard(): { text: string; imageDataUri?: string } {
+        if (this.systemClipboardOverride !== undefined) {
+            return {
+                text: (this.systemClipboardOverride?.text || "").trim(),
+                imageDataUri: this.systemClipboardOverride?.imageDataUri
+            };
+        }
+
+        try {
+            const win = AbstractUIComponent.activeWindow || (typeof window !== "undefined" ? window : undefined);
+            const nwObj =
+                (globalThis as any).nw ||
+                (win as any)?.nw ||
+                (win?.top as any)?.nw ||
+                (win?.parent as any)?.nw;
+            const sysClip = nwObj?.Clipboard?.get?.();
+            if (sysClip) {
+                let text = "";
+                try {
+                    text = String(sysClip.get("text") || "").trim();
+                } catch {
+                    text = "";
+                }
+                let imageDataUri: string | undefined;
+                try {
+                    const types: string[] =
+                        typeof sysClip.readAvailableTypes === "function" ? sysClip.readAvailableTypes() : [];
+                    if (types.includes("png")) {
+                        const png = sysClip.get("png", true);
+                        if (typeof png === "string" && png.startsWith("data:image/")) {
+                            imageDataUri = png;
+                        }
+                    } else if (types.includes("jpeg")) {
+                        const jpg = sysClip.get("jpeg", true);
+                        if (typeof jpg === "string" && jpg.startsWith("data:image/")) {
+                            imageDataUri = jpg;
+                        }
+                    }
+                } catch {
+                    // Ignore raw image clipboard errors
+                }
+                return { text, imageDataUri };
+            }
+        } catch {
+            // Ignore clipboard access error
+        }
+
+        return { text: "" };
+    }
+
+    public static normalizeClipboardUrl(rawText: string): string | null {
+        const trimmed = (rawText || "")
+            .trim()
+            .replace(/^["'<]+|["'>]+$/g, "")
+            .trim();
+        if (!trimmed) return null;
+        if (/^https?:\/\/\S+$/i.test(trimmed)) return trimmed;
+        if (/^data:image\/[a-zA-Z0-9.+-]+;base64,\S+$/i.test(trimmed)) return trimmed;
+        if (/^file:\/\/\S+$/i.test(trimmed)) return trimmed;
+        if (/^www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/\S*$/i.test(trimmed)) return `https://${trimmed}`;
+        return null;
+    }
+
+    private normalizePasteOptions(
+        optsOrMode:
+            | {
+                  inPlace?: boolean;
+                  intoSelection?: boolean;
+                  asNewLayer?: boolean;
+                  asNewImage?: boolean;
+                  asNewSharedObject?: boolean;
+                  bufferName?: string;
+              }
+            | "default"
+            | "in_place"
+            | "into_selection"
+            | "new_layer"
+            | "new_layer_in_place"
+            | "new_image"
+            | "new_shared_object" = {}
+    ): {
+        inPlace?: boolean;
+        intoSelection?: boolean;
+        asNewLayer?: boolean;
+        asNewImage?: boolean;
+        asNewSharedObject?: boolean;
+        bufferName?: string;
+    } {
+        return typeof optsOrMode === "string"
+            ? {
+                  inPlace: optsOrMode === "in_place" || optsOrMode === "new_layer_in_place",
+                  intoSelection: optsOrMode === "into_selection",
+                  asNewLayer: optsOrMode === "new_layer" || optsOrMode === "new_layer_in_place",
+                  asNewImage: optsOrMode === "new_image",
+                  asNewSharedObject: optsOrMode === "new_shared_object"
+              }
+            : optsOrMode;
+    }
+
     public paste(
         optsOrMode:
             | {
@@ -459,28 +582,380 @@ export class EditorSessionState extends AbstractObservableState {
             | "new_image"
             | "new_shared_object" = {}
     ): boolean {
-        const opts: {
+        const opts = this.normalizePasteOptions(optsOrMode);
+
+        if (opts.bufferName) {
+            const namedClip = this.namedBuffers.get(opts.bufferName);
+            if (!namedClip) {
+                this.showError(
+                    "Clipboard Buffer Is Empty",
+                    `Named clipboard buffer "${opts.bufferName}" is empty.`
+                );
+                this.lastPastePromise = Promise.resolve(false);
+                return false;
+            }
+            const ok = this.applyClipboardPaste(namedClip, opts);
+            this.lastPastePromise = Promise.resolve(ok);
+            return ok;
+        }
+
+        const sysClip = this.readSystemClipboard();
+        const hasNewExternalText =
+            Boolean(sysClip.text) && (!this.clipboard || sysClip.text !== this.lastCopiedSystemText);
+        const candidateUrl = hasNewExternalText ? EditorSessionState.normalizeClipboardUrl(sysClip.text) : null;
+
+        if (candidateUrl) {
+            this.lastPastePromise = this.pasteFromUrl(candidateUrl, opts);
+            return true;
+        }
+
+        if (!this.clipboard && sysClip.imageDataUri) {
+            this.lastPastePromise = this.pasteFromUrl(sysClip.imageDataUri, opts);
+            return true;
+        }
+
+        if (!this.clipboard) {
+            if (sysClip.text) {
+                this.showError(
+                    "Failed to Fetch Image from Clipboard",
+                    "The clipboard does not contain an image or a valid image URL (http:// or https://).",
+                    `Clipboard contents: "${sysClip.text.slice(0, 180)}"`
+                );
+            } else {
+                this.showError(
+                    "Clipboard Is Empty",
+                    "Your clipboard is currently empty.\n\nCopy a selection or layer inside HAEditor (Ctrl+C), copy an image from another application, or copy an image URL (http:// or https://) before pasting."
+                );
+            }
+            this.lastPastePromise = Promise.resolve(false);
+            return false;
+        }
+
+        const ok = this.applyClipboardPaste(this.clipboard, opts);
+        this.lastPastePromise = Promise.resolve(ok);
+        return ok;
+    }
+
+    public async pasteAsync(
+        optsOrMode:
+            | {
+                  inPlace?: boolean;
+                  intoSelection?: boolean;
+                  asNewLayer?: boolean;
+                  asNewImage?: boolean;
+                  asNewSharedObject?: boolean;
+                  bufferName?: string;
+              }
+            | "default"
+            | "in_place"
+            | "into_selection"
+            | "new_layer"
+            | "new_layer_in_place"
+            | "new_image"
+            | "new_shared_object" = {}
+    ): Promise<boolean> {
+        this.paste(optsOrMode);
+        return this.lastPastePromise;
+    }
+
+    /**
+     * Fetches an image from a URL (`http://`, `https://`, `data:image/`, or `file://`) in the clipboard,
+     * decodes it into RGBA pixels, and applies the requested paste operation (`New Image`, `New Layer`, etc.).
+     * Shows an error dialog (`#ha-error-dialog`) if fetching or decoding fails.
+     */
+    public async pasteFromUrl(
+        url: string,
+        opts: {
+            inPlace?: boolean;
+            intoSelection?: boolean;
+            asNewLayer?: boolean;
+            asNewImage?: boolean;
+            asNewSharedObject?: boolean;
+        } = {}
+    ): Promise<boolean> {
+        const displayUrl = url.startsWith("data:") ? "data:image/... (clipboard image)" : url;
+        this.setStatus(`Fetching image from clipboard URL: ${displayUrl}...`);
+        try {
+            const clip = await this.fetchAndDecodeUrlImage(url);
+            this.clipboard = clip;
+            this.lastCopiedSystemText = url;
+            return this.applyClipboardPaste(clip, opts);
+        } catch (err: any) {
+            this.showError(
+                "Failed to Fetch Image from Clipboard URL",
+                `Could not fetch or decode a valid image from the clipboard URL:\n${displayUrl}`,
+                err?.message || String(err)
+            );
+            return false;
+        }
+    }
+
+    private async fetchAndDecodeUrlImage(url: string): Promise<EditorClipboardBuffer> {
+        if (/^data:image\//i.test(url)) {
+            const match = url.match(/^data:([^;,]+)?(?:;base64)?,(.*)$/is);
+            if (!match || !match[2]) {
+                throw new Error("Malformed data:image URI in clipboard.");
+            }
+            const mime = (match[1] || "image/png").trim().toLowerCase();
+            const buf = Buffer.from(match[2].trim(), "base64");
+            if (buf.length === 0) {
+                throw new Error("Clipboard data:image URI decoded to 0 bytes.");
+            }
+            return this.decodeImageBufferToClipboard(buf, "ClipboardImage", mime);
+        }
+
+        if (/^file:\/\//i.test(url)) {
+            const localPath = fileURLToPath(url);
+            if (!fs.existsSync(localPath)) {
+                throw new Error(`File does not exist at path: ${localPath}`);
+            }
+            const buf = fs.readFileSync(localPath);
+            return this.decodeImageBufferToClipboard(buf, path.basename(localPath));
+        }
+
+        const { buffer, contentType, finalUrl } = await this.fetchUrlBufferWithRedirects(url, 5);
+        let sourceName = "ClipboardUrlImage";
+        try {
+            const parsed = new URL(finalUrl);
+            const base = path.basename(parsed.pathname);
+            if (base && base !== "/") {
+                sourceName = base;
+            }
+        } catch {
+            // Keep default name
+        }
+        return this.decodeImageBufferToClipboard(buffer, sourceName, contentType);
+    }
+
+    private fetchUrlBufferWithRedirects(
+        urlStr: string,
+        redirectsRemaining: number
+    ): Promise<{ buffer: Buffer; contentType: string; finalUrl: string }> {
+        return new Promise((resolve, reject) => {
+            let parsedUrl: URL;
+            try {
+                parsedUrl = new URL(urlStr);
+            } catch {
+                reject(new Error(`Invalid URL syntax: "${urlStr}"`));
+                return;
+            }
+
+            if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+                reject(new Error(`Unsupported URL protocol "${parsedUrl.protocol}" (expected http: or https:).`));
+                return;
+            }
+
+            const client = parsedUrl.protocol === "https:" ? https : http;
+            const req = client.get(
+                parsedUrl,
+                {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HAEditor/1.0 Chrome/124.0.0.0 Safari/537.36",
+                        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                    },
+                    timeout: 15000
+                },
+                (res) => {
+                    const status = res.statusCode || 0;
+                    if ([301, 302, 303, 307, 308].includes(status) && res.headers.location) {
+                        res.resume();
+                        if (redirectsRemaining <= 0) {
+                            reject(new Error("Too many HTTP redirects while fetching image URL."));
+                            return;
+                        }
+                        try {
+                            const nextUrl = new URL(res.headers.location, parsedUrl).toString();
+                            this.fetchUrlBufferWithRedirects(nextUrl, redirectsRemaining - 1).then(resolve, reject);
+                        } catch (e) {
+                            reject(e);
+                        }
+                        return;
+                    }
+
+                    if (status < 200 || status >= 300) {
+                        res.resume();
+                        reject(new Error(`Server responded with HTTP ${status} ${res.statusMessage || ""}.`.trim()));
+                        return;
+                    }
+
+                    const chunks: Buffer[] = [];
+                    res.on("data", (chunk: Buffer) => {
+                        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+                    });
+                    res.on("end", () => {
+                        const fullBuf = Buffer.concat(chunks);
+                        if (fullBuf.length === 0) {
+                            reject(new Error("Server returned an empty response body (0 bytes)."));
+                            return;
+                        }
+                        const contentType = String(res.headers["content-type"] || "")
+                            .split(";")[0]
+                            .trim()
+                            .toLowerCase();
+                        resolve({ buffer: fullBuf, contentType, finalUrl: parsedUrl.toString() });
+                    });
+                    res.on("error", (err) => reject(err));
+                }
+            );
+
+            req.on("timeout", () => {
+                req.destroy(new Error("Timed out (15s) while fetching image from URL."));
+            });
+            req.on("error", (err) => {
+                reject(err);
+            });
+        });
+    }
+
+    private async decodeImageBufferToClipboard(
+        buf: Buffer,
+        sourceName: string,
+        contentType?: string
+    ): Promise<EditorClipboardBuffer> {
+        const headUtf8 = buf.subarray(0, Math.min(512, buf.length)).toString("utf8").trimStart().toLowerCase();
+        if (
+            contentType === "text/html" ||
+            contentType === "application/json" ||
+            headUtf8.startsWith("<!doctype html") ||
+            headUtf8.startsWith("<html")
+        ) {
+            throw new Error(
+                `The URL returned ${contentType || "an HTML webpage"} instead of an image file.`
+            );
+        }
+
+        // 1. Try built-in HACanvas ImageCodecRegistry for signature-matched formats (PNG, BMP, GIF, PSD, XCF, AI, ORA, ICO, PPM, Farbfeld, etc.)
+        try {
+            const codec = ImageCodecRegistry.findCodecForBuffer(buf, sourceName);
+            if (codec) {
+                const doc = codec.decodeToDocument(buf, sourceName);
+                if (doc && doc.width > 0 && doc.height > 0 && doc.layers.length > 0) {
+                    const rasLayer = doc.layers.find((l) => l.type === "raster" && l.rgba && l.rgba.length >= doc.width * doc.height * 4);
+                    if (rasLayer && rasLayer.rgba) {
+                        return {
+                            name: sourceName || `${doc.format.toUpperCase()} (${doc.width}×${doc.height})`,
+                            kind: "raster",
+                            width: doc.width,
+                            height: doc.height,
+                            originX: 0,
+                            originY: 0,
+                            rasterPixels: Buffer.from(rasLayer.rgba),
+                            timestamp: Date.now()
+                        };
+                    }
+                    const vecLayer = doc.layers.find((l) => l.type === "vector" && l.objects && l.objects.length > 0);
+                    if (vecLayer && vecLayer.objects) {
+                        return {
+                            name: sourceName || `${doc.format.toUpperCase()} Vector (${doc.width}×${doc.height})`,
+                            kind: "vector",
+                            width: doc.width,
+                            height: doc.height,
+                            originX: 0,
+                            originY: 0,
+                            vectorObjects: vecLayer.objects,
+                            timestamp: Date.now()
+                        };
+                    }
+                }
+            }
+        } catch {
+            // Fall through to Chromium HTMLImageElement decoder
+        }
+
+        // 2. Decode via Chromium / NW.js HTMLImageElement + offscreen <canvas> (supports JPEG, WebP, AVIF, PNG, GIF, BMP, ICO, SVG)
+        const docObj = AbstractUIComponent.activeDocument || (typeof document !== "undefined" ? document : undefined);
+        const winObj = AbstractUIComponent.activeWindow || (typeof window !== "undefined" ? window : undefined);
+        const ImgCtor = (winObj as any)?.Image || (typeof Image !== "undefined" ? Image : undefined);
+
+        if (docObj && ImgCtor) {
+            let mime = contentType && contentType.startsWith("image/") ? contentType : "image/png";
+            if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+                mime = "image/jpeg";
+            } else if (
+                buf.length >= 12 &&
+                buf.toString("ascii", 0, 4) === "RIFF" &&
+                buf.toString("ascii", 8, 12) === "WEBP"
+            ) {
+                mime = "image/webp";
+            } else if (buf.length >= 8 && buf[0] === 137 && buf[1] === 80 && buf[2] === 78 && buf[3] === 71) {
+                mime = "image/png";
+            } else if (buf.length >= 6 && buf.toString("ascii", 0, 3) === "GIF") {
+                mime = "image/gif";
+            } else if (buf.length >= 2 && buf[0] === 0x42 && buf[1] === 0x4d) {
+                mime = "image/bmp";
+            } else if (headUtf8.includes("<svg")) {
+                mime = "image/svg+xml";
+            }
+
+            return await new Promise<EditorClipboardBuffer>((resolve, reject) => {
+                const img = new ImgCtor();
+                img.onload = () => {
+                    const w = Math.max(1, img.naturalWidth || img.width || 0);
+                    const h = Math.max(1, img.naturalHeight || img.height || 0);
+                    if (!w || !h) {
+                        reject(new Error("Decoded image has invalid 0×0 dimensions."));
+                        return;
+                    }
+                    const offscreen = docObj.createElement("canvas");
+                    offscreen.width = w;
+                    offscreen.height = h;
+                    const ctx = offscreen.getContext("2d");
+                    if (!ctx) {
+                        reject(new Error("Could not acquire 2D canvas context to decode image."));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const imgData = ctx.getImageData(0, 0, w, h);
+                    const rgbaBuf = Buffer.from(
+                        imgData.data.buffer,
+                        imgData.data.byteOffset,
+                        imgData.data.byteLength
+                    );
+                    resolve({
+                        name: sourceName || `URL Image (${w}×${h})`,
+                        kind: "raster",
+                        width: w,
+                        height: h,
+                        originX: 0,
+                        originY: 0,
+                        rasterPixels: rgbaBuf,
+                        timestamp: Date.now()
+                    });
+                };
+                img.onerror = () => {
+                    reject(
+                        new Error(
+                            `The resource at "${sourceName}" (${contentType || "unknown type"}, ${buf.length} bytes) could not be decoded as a valid image.`
+                        )
+                    );
+                };
+                img.src = `data:${mime};base64,${buf.toString("base64")}`;
+            });
+        }
+
+        throw new Error(
+            `Unsupported or corrupted image format for "${sourceName}" (${contentType || "unknown type"}).`
+        );
+    }
+
+    private applyClipboardPaste(
+        clip: EditorClipboardBuffer,
+        opts: {
             inPlace?: boolean;
             intoSelection?: boolean;
             asNewLayer?: boolean;
             asNewImage?: boolean;
             asNewSharedObject?: boolean;
             bufferName?: string;
-        } =
-            typeof optsOrMode === "string"
-                ? {
-                      inPlace: optsOrMode === "in_place" || optsOrMode === "new_layer_in_place",
-                      intoSelection: optsOrMode === "into_selection",
-                      asNewLayer: optsOrMode === "new_layer" || optsOrMode === "new_layer_in_place",
-                      asNewImage: optsOrMode === "new_image",
-                      asNewSharedObject: optsOrMode === "new_shared_object"
-                  }
-                : optsOrMode;
-
-        const clip = opts.bufferName ? this.namedBuffers.get(opts.bufferName) : this.clipboard;
-        if (!clip) {
-            this.setStatus("Clipboard is empty — Copy (Ctrl+C) or Cut (Ctrl+X) first.");
-            return false;
+        }
+    ): boolean {
+        // If no canvas is open yet and the user pastes (e.g., Paste as New Layer or Paste from the Splash Screen),
+        // automatically open a canvas sized to the clipboard content!
+        if (!opts.asNewImage && (!this.hasOpenCanvas || !this.engine.hasCanvas(this.canvasId))) {
+            const initW = Math.max(32, clip.width);
+            const initH = Math.max(32, clip.height);
+            this.ensureCanvasOpen(initW, initH);
         }
 
         if (opts.asNewSharedObject) {
@@ -550,6 +1025,9 @@ export class EditorSessionState extends AbstractObservableState {
                         { width: clip.width, height: clip.height, x: 0, y: 0, pixels: clip.rasterPixels },
                         { layerId: rasLayer?.id, inPlace: true }
                     );
+                    if (rasLayer) {
+                        this.activeLayerId = rasLayer.id;
+                    }
                 }
             });
             this.setStatus(`Created new ${w}×${h}px image from clipboard.`);
@@ -595,7 +1073,11 @@ export class EditorSessionState extends AbstractObservableState {
         }
 
         if (clip.rasterPixels) {
-            const rasLayer = this.resolveActiveLayer("raster");
+            const hasUnlockedRaster = this.getActiveContainerLayers().some(
+                (l) => l.type === "raster" && !l.locked
+            );
+            const useAsNewLayer = Boolean(opts.asNewLayer || !hasUnlockedRaster);
+            const rasLayer = hasUnlockedRaster ? this.resolveActiveLayer("raster") : undefined;
             const pastedLayer = this.engine.pasteRegionPixels(
                 this.canvasId,
                 {
@@ -609,7 +1091,7 @@ export class EditorSessionState extends AbstractObservableState {
                     layerId: rasLayer?.id,
                     inPlace: opts.inPlace,
                     intoSelection: opts.intoSelection,
-                    asNewLayer: opts.asNewLayer,
+                    asNewLayer: useAsNewLayer,
                     newLayerName: clip.name ? `Pasted: ${clip.name}` : "Pasted Layer",
                     sharedObjectId: this.activeSharedObjectId
                 }
