@@ -15,6 +15,12 @@ export interface PromptFieldSpec {
     step?: number;
     options?: Array<{ label: string; value: string }>;
     quickChips?: Array<{ label: string; value: string }>;
+    visibleWhen?:
+        | {
+              fieldKey: string;
+              equals: string | string[];
+          }
+        | ((values: Record<string, string>) => boolean);
 }
 
 export interface FormPresetOption {
@@ -575,7 +581,31 @@ export class ModalDialogManager extends AbstractUIComponent {
 
         const valueSetters: Record<string, (val: string) => void> = {};
         const valueGetters: Record<string, () => string> = {};
+        const conditionalRows: Array<{ field: PromptFieldSpec; rowEl: HTMLElement }> = [];
         let firstFocusable: HTMLElement | null = null;
+
+        const refreshFieldVisibility = () => {
+            if (conditionalRows.length === 0) return;
+            const currentValues: Record<string, string> = {};
+            for (const [k, getter] of Object.entries(valueGetters)) {
+                currentValues[k] = getter();
+            }
+            for (const { field, rowEl } of conditionalRows) {
+                const rule = field.visibleWhen;
+                if (!rule) continue;
+                let visible = true;
+                if (typeof rule === "function") {
+                    visible = Boolean(rule(currentValues));
+                } else {
+                    const actual = currentValues[rule.fieldKey] ?? "";
+                    visible = Array.isArray(rule.equals)
+                        ? rule.equals.includes(actual)
+                        : actual === rule.equals;
+                }
+                rowEl.style.display = visible ? "" : "none";
+                rowEl.setAttribute("data-field-visible", visible ? "true" : "false");
+            }
+        };
 
         if (options.presets && options.presets.length > 0) {
             const presetBox = this.createElement("div", "ha-modal-presets-box");
@@ -593,6 +623,7 @@ export class ModalDialogManager extends AbstractUIComponent {
                     for (const [k, v] of Object.entries(p.values)) {
                         if (valueSetters[k]) valueSetters[k](v);
                     }
+                    refreshFieldVisibility();
                 });
                 pillsRow.appendChild(btn);
             }
@@ -601,7 +632,12 @@ export class ModalDialogManager extends AbstractUIComponent {
         }
 
         for (const field of options.fields) {
-            const row = this.createElement("div", "ha-modal-field-row");
+            const row = this.createElement("div", "ha-modal-field-row", undefined, {
+                "data-row-field-key": field.key
+            });
+            if (field.visibleWhen) {
+                conditionalRows.push({ field, rowEl: row });
+            }
             const label = this.createElement("label", "ha-modal-label", field.label);
             row.appendChild(label);
 
@@ -618,9 +654,11 @@ export class ModalDialogManager extends AbstractUIComponent {
                     if (opt.value === field.defaultValue) oEl.selected = true;
                     sel.appendChild(oEl);
                 }
+                sel.addEventListener("change", () => refreshFieldVisibility());
                 valueGetters[field.key] = () => sel.value;
                 valueSetters[field.key] = (v: string) => {
                     sel.value = v;
+                    refreshFieldVisibility();
                 };
                 row.appendChild(sel);
                 if (!firstFocusable) firstFocusable = sel;
@@ -640,16 +678,19 @@ export class ModalDialogManager extends AbstractUIComponent {
                 });
                 colorPicker.addEventListener("input", () => {
                     textInp.value = colorPicker.value;
+                    refreshFieldVisibility();
                 });
                 textInp.addEventListener("input", () => {
                     if (/^#[0-9a-fA-F]{6}$/.test(textInp.value.trim())) {
                         colorPicker.value = textInp.value.trim();
                     }
+                    refreshFieldVisibility();
                 });
                 valueGetters[field.key] = () => textInp.value.trim();
                 valueSetters[field.key] = (v: string) => {
                     textInp.value = v;
                     if (/^#[0-9a-fA-F]{6}$/.test(v)) colorPicker.value = v;
+                    refreshFieldVisibility();
                 };
                 colorRow.append(colorPicker, textInp);
                 row.appendChild(colorRow);
@@ -676,14 +717,17 @@ export class ModalDialogManager extends AbstractUIComponent {
                 });
                 rangeInp.addEventListener("input", () => {
                     numInp.value = rangeInp.value;
+                    refreshFieldVisibility();
                 });
                 numInp.addEventListener("input", () => {
                     rangeInp.value = numInp.value;
+                    refreshFieldVisibility();
                 });
                 valueGetters[field.key] = () => numInp.value.trim();
                 valueSetters[field.key] = (v: string) => {
                     numInp.value = v;
                     rangeInp.value = v;
+                    refreshFieldVisibility();
                 };
                 numRow.append(rangeInp, numInp);
                 row.appendChild(numRow);
@@ -695,9 +739,11 @@ export class ModalDialogManager extends AbstractUIComponent {
                     value: field.defaultValue,
                     placeholder: field.placeholder || ""
                 });
+                input.addEventListener("input", () => refreshFieldVisibility());
                 valueGetters[field.key] = () => input.value.trim();
                 valueSetters[field.key] = (v: string) => {
                     input.value = v;
+                    refreshFieldVisibility();
                 };
                 row.appendChild(input);
                 if (!firstFocusable) firstFocusable = input;
@@ -720,6 +766,8 @@ export class ModalDialogManager extends AbstractUIComponent {
 
             body.appendChild(row);
         }
+
+        refreshFieldVisibility();
 
         const footer = this.createElement("div", "ha-modal-footer");
         const cancelBtn = this.createElement("button", "ha-btn ha-btn-secondary", "Cancel", {

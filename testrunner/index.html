@@ -923,6 +923,50 @@
                   }
 
                   runInMainWorld('window.haEditorApp.state.systemClipboardOverride = undefined;');
+
+                  // 4. Verify AI Provider dialog only displays options for the currently selected provider
+                  const aiSettingsBtn = document.getElementById('btn-ai-settings');
+                  if (!aiSettingsBtn) {
+                    window.__testErrors.push('Missing #btn-ai-settings button');
+                    return;
+                  }
+                  aiSettingsBtn.click();
+
+                  const providerSel = document.querySelector('select[data-field-key="activeProvider"]');
+                  const lmUrlRow = document.querySelector('[data-row-field-key="lmStudioUrl"]');
+                  const openaiKeyRow = document.querySelector('[data-row-field-key="openaiApiKey"]');
+                  const claudeKeyRow = document.querySelector('[data-row-field-key="claudeApiKey"]');
+                  const geminiKeyRow = document.querySelector('[data-row-field-key="geminiApiKey"]');
+                  const grokKeyRow = document.querySelector('[data-row-field-key="grokApiKey"]');
+
+                  if (!providerSel || !lmUrlRow || !openaiKeyRow || !claudeKeyRow || !geminiKeyRow || !grokKeyRow) {
+                    window.__testErrors.push('Missing expected provider rows in AI Settings dialog');
+                    return;
+                  }
+
+                  // Default provider is lmstudio -> lmStudioUrl visible, openai/claude/gemini/grok hidden
+                  if (lmUrlRow.style.display === 'none' || openaiKeyRow.style.display !== 'none' || claudeKeyRow.style.display !== 'none' || geminiKeyRow.style.display !== 'none' || grokKeyRow.style.display !== 'none') {
+                    window.__testErrors.push('Expected only LM Studio fields to be visible when activeProvider="lmstudio"');
+                    return;
+                  }
+
+                  // Switch activeProvider to "openai" -> only OpenAI fields visible, LM Studio/Claude/Gemini/Grok hidden
+                  providerSel.value = 'openai';
+                  providerSel.dispatchEvent(new Event('change', { bubbles: true }));
+                  if (openaiKeyRow.style.display === 'none' || lmUrlRow.style.display !== 'none' || claudeKeyRow.style.display !== 'none' || geminiKeyRow.style.display !== 'none' || grokKeyRow.style.display !== 'none') {
+                    window.__testErrors.push('Expected only OpenAI fields to be visible when activeProvider="openai"');
+                    return;
+                  }
+
+                  // Switch activeProvider to "claude" -> only Claude fields visible
+                  providerSel.value = 'claude';
+                  providerSel.dispatchEvent(new Event('change', { bubbles: true }));
+                  if (claudeKeyRow.style.display === 'none' || openaiKeyRow.style.display !== 'none' || lmUrlRow.style.display !== 'none') {
+                    window.__testErrors.push('Expected only Claude fields to be visible when activeProvider="claude"');
+                    return;
+                  }
+
+                  document.getElementById('ha-modal-cancel').click();
                 `
               }
             ];

@@ -246,18 +246,22 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                 },
                 {
                     key: "lmStudioUrl",
-                    label: "LM Studio / Custom OpenAI Server URL",
+                    label: "Server Endpoint URL",
                     type: "text",
                     defaultValue: cfg.lmStudioUrl || "http://localhost:1234",
                     placeholder: "http://localhost:1234",
-                    description: "Used when Active Provider is LM Studio or Custom OpenAI."
+                    visibleWhen: { fieldKey: "activeProvider", equals: ["lmstudio", "custom-openai"] }
                 },
                 {
                     key: "aiModel",
-                    label: "LM Studio / Default Model Identifier",
+                    label: "Model Identifier",
                     type: "text",
                     defaultValue: cfg.aiModel || "local-model",
                     placeholder: "local-model",
+                    visibleWhen: (vals) =>
+                        !["openai", "claude", "custom-claude", "gemini", "gemini-googleone", "grok"].includes(
+                            vals.activeProvider
+                        ),
                     quickChips: [
                         { label: "Currently Loaded Model (local-model)", value: "local-model" },
                         { label: "Qwen 2.5 / 3 Coder", value: "qwen2.5-coder" },
@@ -269,13 +273,15 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     label: "OpenAI API Key",
                     type: "text",
                     defaultValue: cfg.openaiApiKey || "",
-                    placeholder: "sk-..."
+                    placeholder: "sk-...",
+                    visibleWhen: { fieldKey: "activeProvider", equals: ["openai", "custom-openai"] }
                 },
                 {
                     key: "openaiModel",
                     label: "OpenAI Model",
                     type: "text",
                     defaultValue: cfg.openaiModel || "gpt-4o",
+                    visibleWhen: { fieldKey: "activeProvider", equals: "openai" },
                     quickChips: [
                         { label: "gpt-4o", value: "gpt-4o" },
                         { label: "gpt-4o-mini", value: "gpt-4o-mini" },
@@ -283,17 +289,27 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     ]
                 },
                 {
+                    key: "customClaudeUrl",
+                    label: "Custom Anthropic Claude Endpoint URL",
+                    type: "text",
+                    defaultValue: cfg.customClaudeUrl || "https://api.anthropic.com",
+                    placeholder: "https://api.anthropic.com",
+                    visibleWhen: { fieldKey: "activeProvider", equals: "custom-claude" }
+                },
+                {
                     key: "claudeApiKey",
                     label: "Anthropic Claude API Key",
                     type: "text",
                     defaultValue: cfg.claudeApiKey || "",
-                    placeholder: "sk-ant-..."
+                    placeholder: "sk-ant-...",
+                    visibleWhen: { fieldKey: "activeProvider", equals: ["claude", "custom-claude"] }
                 },
                 {
                     key: "claudeModel",
                     label: "Anthropic Claude Model",
                     type: "text",
                     defaultValue: cfg.claudeModel || "claude-3-7-sonnet-latest",
+                    visibleWhen: { fieldKey: "activeProvider", equals: ["claude", "custom-claude"] },
                     quickChips: [
                         { label: "claude-3-7-sonnet-latest", value: "claude-3-7-sonnet-latest" },
                         { label: "claude-3-5-sonnet-20241022", value: "claude-3-5-sonnet-20241022" }
@@ -304,13 +320,15 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     label: "Google Gemini API Key",
                     type: "text",
                     defaultValue: cfg.geminiApiKey || "",
-                    placeholder: "AIza..."
+                    placeholder: "AIza...",
+                    visibleWhen: { fieldKey: "activeProvider", equals: "gemini" }
                 },
                 {
                     key: "geminiModel",
                     label: "Google Gemini Model",
                     type: "text",
                     defaultValue: cfg.geminiModel || "gemini-2.5-pro",
+                    visibleWhen: { fieldKey: "activeProvider", equals: ["gemini", "gemini-googleone"] },
                     quickChips: [
                         { label: "gemini-2.5-pro", value: "gemini-2.5-pro" },
                         { label: "gemini-2.5-flash", value: "gemini-2.5-flash" }
@@ -321,13 +339,15 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     label: "xAI Grok API Key",
                     type: "text",
                     defaultValue: cfg.grokApiKey || "",
-                    placeholder: "xai-..."
+                    placeholder: "xai-...",
+                    visibleWhen: { fieldKey: "activeProvider", equals: "grok" }
                 },
                 {
                     key: "grokModel",
                     label: "xAI Grok Model",
                     type: "text",
                     defaultValue: cfg.grokModel || "grok-2",
+                    visibleWhen: { fieldKey: "activeProvider", equals: "grok" },
                     quickChips: [
                         { label: "grok-2", value: "grok-2" },
                         { label: "grok-4.7", value: "grok-4.7" }
@@ -364,6 +384,7 @@ export class AiAssistantDockPanel extends AbstractDockPanel {
                     openaiModel: (vals.openaiModel || "gpt-4o").trim(),
                     claudeApiKey: (vals.claudeApiKey || "").trim(),
                     claudeModel: (vals.claudeModel || "claude-3-7-sonnet-latest").trim(),
+                    customClaudeUrl: (vals.customClaudeUrl || "https://api.anthropic.com").trim(),
                     geminiApiKey: (vals.geminiApiKey || "").trim(),
                     geminiModel: (vals.geminiModel || "gemini-2.5-pro").trim(),
                     grokApiKey: (vals.grokApiKey || "").trim(),
