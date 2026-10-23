@@ -976,6 +976,51 @@
                   }
 
                   document.getElementById('ha-modal-cancel').click();
+
+                  // 5. Verify Image -> Canvas Size... dialog renders GIMP Offset Preview & interactive alignment controls
+                  const imgMenuBtn = document.getElementById('menu-image');
+                  imgMenuBtn.click();
+                  const canvasSizeItem = document.getElementById('menu-image-canvas-size');
+                  if (!canvasSizeItem) {
+                    window.__testErrors.push('Missing #menu-image-canvas-size in Image menu');
+                    return;
+                  }
+                  canvasSizeItem.click();
+
+                  const previewBox = document.getElementById('ha-canvas-size-preview-box');
+                  const previewCanvas = document.getElementById('ha-canvas-size-preview-canvas');
+                  const centerBtn = document.getElementById('btn-canvas-size-center');
+                  const brAnchor = document.querySelector('#ha-canvas-size-anchor-grid [data-anchor="br"]');
+                  const wInput = document.querySelector('input[type="number"][data-field-key="width"]');
+                  const hInput = document.querySelector('input[type="number"][data-field-key="height"]');
+                  const oxInput = document.querySelector('input[type="number"][data-field-key="offsetX"]');
+                  const oyInput = document.querySelector('input[type="number"][data-field-key="offsetY"]');
+
+                  if (!previewBox || !previewCanvas || !centerBtn || !brAnchor || !wInput || !hInput || !oxInput || !oyInput) {
+                    window.__testErrors.push('Missing GIMP Canvas Size preview elements (#ha-canvas-size-preview-canvas, #btn-canvas-size-center, #ha-canvas-size-anchor-grid)');
+                    return;
+                  }
+
+                  const origW = Number(wInput.value);
+                  const origH = Number(hInput.value);
+                  wInput.value = String(origW + 200);
+                  wInput.dispatchEvent(new Event('input', { bubbles: true }));
+                  hInput.value = String(origH + 100);
+                  hInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                  centerBtn.click();
+                  if (Number(oxInput.value) !== 100 || Number(oyInput.value) !== 50 || previewCanvas.getAttribute('data-preview-offset-x') !== '100' || previewCanvas.getAttribute('data-preview-offset-y') !== '50') {
+                    window.__testErrors.push('Expected clicking Center in Canvas Size dialog to set offset (100, 50) and update preview canvas');
+                    return;
+                  }
+
+                  brAnchor.click();
+                  if (Number(oxInput.value) !== 200 || Number(oyInput.value) !== 100 || previewCanvas.getAttribute('data-preview-offset-x') !== '200' || previewCanvas.getAttribute('data-preview-offset-y') !== '100') {
+                    window.__testErrors.push('Expected clicking bottom-right anchor in Canvas Size dialog to set offset (200, 100)');
+                    return;
+                  }
+
+                  document.getElementById('ha-modal-cancel').click();
                 `
               }
             ];

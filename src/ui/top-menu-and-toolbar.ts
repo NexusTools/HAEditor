@@ -591,22 +591,301 @@ export class TopMenuBar extends AbstractUIComponent {
 
     public openCanvasSizeDialog(): void {
         const st = this.state.getCanvasState();
+        const oldW = Math.max(1, st.width);
+        const oldH = Math.max(1, st.height);
+
+        // Pre-render a composite thumbnail of the current canvas so the GIMP offset preview shows the actual artwork
+        const thumbCanvas = this.doc.createElement("canvas");
+        thumbCanvas.width = oldW;
+        thumbCanvas.height = oldH;
+        try {
+            const comp = this.state.engine.compositeCanvasFrame(st, {
+                frame: this.state.currentFrame
+            });
+            const tCtx = thumbCanvas.getContext("2d");
+            if (tCtx && comp.pixels && comp.width > 0 && comp.height > 0) {
+                const imgData = tCtx.createImageData(comp.width, comp.height);
+                imgData.data.set(
+                    new Uint8ClampedArray(comp.pixels.buffer, comp.pixels.byteOffset, comp.pixels.byteLength)
+                );
+                tCtx.putImageData(imgData, 0, 0);
+            }
+        } catch {
+            // Fallback if canvas composite is unavailable
+        }
+
         this.modal.openFormDialog({
             title: "Set Image Canvas Size (GIMP Canvas Size)",
             subtitle:
-                "Resize the canvas boundaries without stretching existing artwork. Choose a preset or enter custom dimensions and X/Y offsets.",
+                "Resize the canvas boundaries without stretching existing artwork. Drag the preview or use the alignment buttons to position the X/Y offset visually.",
             presets: [
                 { label: "Standard (640×420)", icon: "🖼️", values: { width: "640", height: "420", offsetX: "0", offsetY: "0" } },
                 { label: "HD 720p (1280×720)", icon: "📺", values: { width: "1280", height: "720", offsetX: "0", offsetY: "0" } },
                 { label: "Full HD (1920×1080)", icon: "🖥️", values: { width: "1920", height: "1080", offsetX: "0", offsetY: "0" } },
-                { label: "Add 64px Padding Around", icon: "➕", values: { width: String(st.width + 128), height: String(st.height + 128), offsetX: "64", offsetY: "64" } }
+                { label: "Add 64px Padding Around", icon: "➕", values: { width: String(oldW + 128), height: String(oldH + 128), offsetX: "64", offsetY: "64" } }
             ],
             fields: [
-                { key: "width", label: "Canvas Width (px)", type: "number", min: 1, max: 8192, step: 8, defaultValue: String(st.width) },
-                { key: "height", label: "Canvas Height (px)", type: "number", min: 1, max: 8192, step: 8, defaultValue: String(st.height) },
+                { key: "width", label: "Canvas Width (px)", type: "number", min: 1, max: 8192, step: 8, defaultValue: String(oldW) },
+                { key: "height", label: "Canvas Height (px)", type: "number", min: 1, max: 8192, step: 8, defaultValue: String(oldH) },
                 { key: "offsetX", label: "Offset X (px)", type: "number", min: -4096, max: 4096, step: 1, defaultValue: "0" },
                 { key: "offsetY", label: "Offset Y (px)", type: "number", min: -4096, max: 4096, step: 1, defaultValue: "0" }
             ],
+            customPreview: ({ getValues, setValues, onChange }) => {
+                const previewBox = this.createElement("div", "ha-canvas-size-preview-box", undefined, {
+                    id: "ha-canvas-size-preview-box"
+                });
+
+                const headerRow = this.createElement("div", "ha-canvas-size-preview-header");
+                const titleEl = this.createElement("span", "ha-canvas-size-preview-title", "📐 Offset Preview");
+                const hintEl = this.createElement("span", "ha-canvas-size-preview-hint", "Drag to move offset");
+                headerRow.append(titleEl, hintEl);
+
+                const previewW = 270;
+                const previewH = 176;
+                const previewCanvas = this.createElement("canvas", "ha-canvas-size-preview-canvas", undefined, {
+                    id: "ha-canvas-size-preview-canvas",
+                    width: String(previewW),
+                    height: String(previewH),
+                    title: "Drag to position the existing image inside the new canvas boundary"
+                }) as HTMLCanvasElement;
+
+                const controlsRow = this.createElement("div", "ha-canvas-size-preview-controls");
+
+                const anchorGrid = this.createElement("div", "ha-canvas-size-anchor-grid", undefined, {
+                    id: "ha-canvas-size-anchor-grid",
+                    title: "Snap image alignment inside new canvas"
+                });
+                const anchors: Array<{ id: string; label: string; title: string; ax: number; ay: number }> = [
+                    { id: "tl", label: "↖", title: "Align Top-Left", ax: 0, ay: 0 },
+                    { id: "tc", label: "↑", title: "Align Top-Center", ax: 0.5, ay: 0 },
+                    { id: "tr", label: "↗", title: "Align Top-Right", ax: 1, ay: 0 },
+                    { id: "ml", label: "←", title: "Align Middle-Left", ax: 0, ay: 0.5 },
+                    { id: "mc", label: "•", title: "Center Image in Canvas", ax: 0.5, ay: 0.5 },
+                    { id: "mr", label: "→", title: "Align Middle-Right", ax: 1, ay: 0.5 },
+                    { id: "bl", label: "↙", title: "Align Bottom-Left", ax: 0, ay: 1 },
+                    { id: "bc", label: "↓", title: "Align Bottom-Center", ax: 0.5, ay: 1 },
+                    { id: "br", label: "↘", title: "Align Bottom-Right", ax: 1, ay: 1 }
+                ];
+
+                for (const a of anchors) {
+                    const aBtn = this.createElement("button", "ha-canvas-size-anchor-btn", a.label, {
+                        type: "button",
+                        "data-anchor": a.id,
+                        title: a.title
+                    });
+                    aBtn.addEventListener("click", () => {
+                        const cur = getValues();
+                        const nw = Math.max(1, Number(cur.width) || oldW);
+                        const nh = Math.max(1, Number(cur.height) || oldH);
+                        const nextOx = Math.round((nw - oldW) * a.ax);
+                        const nextOy = Math.round((nh - oldH) * a.ay);
+                        setValues({ offsetX: String(nextOx), offsetY: String(nextOy) });
+                    });
+                    anchorGrid.appendChild(aBtn);
+                }
+
+                const btnCol = this.createElement("div", "ha-canvas-size-btn-col");
+                const centerBtn = this.createElement("button", "ha-btn ha-btn-secondary ha-btn-sm", "🎯 Center", {
+                    id: "btn-canvas-size-center",
+                    type: "button",
+                    title: "Center existing image inside new canvas boundaries"
+                });
+                centerBtn.addEventListener("click", () => {
+                    const cur = getValues();
+                    const nw = Math.max(1, Number(cur.width) || oldW);
+                    const nh = Math.max(1, Number(cur.height) || oldH);
+                    setValues({
+                        offsetX: String(Math.round((nw - oldW) / 2)),
+                        offsetY: String(Math.round((nh - oldH) / 2))
+                    });
+                });
+
+                const resetOffsetBtn = this.createElement("button", "ha-btn ha-btn-secondary ha-btn-sm", "↺ Reset (0, 0)", {
+                    id: "btn-canvas-size-reset-offset",
+                    type: "button",
+                    title: "Reset X and Y offsets to (0, 0)"
+                });
+                resetOffsetBtn.addEventListener("click", () => {
+                    setValues({ offsetX: "0", offsetY: "0" });
+                });
+                btnCol.append(centerBtn, resetOffsetBtn);
+                controlsRow.append(anchorGrid, btnCol);
+
+                const legendRow = this.createElement("div", "ha-canvas-size-legend");
+                legendRow.innerHTML = `
+                    <span class="ha-legend-item"><span class="ha-legend-swatch new-canvas"></span>New Canvas</span>
+                    <span class="ha-legend-item"><span class="ha-legend-swatch orig-image"></span>Original Image</span>
+                `;
+
+                const infoEl = this.createElement("div", "ha-canvas-size-preview-info", undefined, {
+                    id: "ha-canvas-size-preview-info"
+                });
+
+                let currentScale = 1;
+                const drawPreview = (vals: Record<string, string>) => {
+                    const nw = Math.max(1, Number(vals.width) || oldW);
+                    const nh = Math.max(1, Number(vals.height) || oldH);
+                    const ox = Number(vals.offsetX) || 0;
+                    const oy = Number(vals.offsetY) || 0;
+
+                    const minX = Math.min(0, ox);
+                    const minY = Math.min(0, oy);
+                    const maxX = Math.max(nw, ox + oldW);
+                    const maxY = Math.max(nh, oy + oldH);
+                    const unionW = Math.max(1, maxX - minX);
+                    const unionH = Math.max(1, maxY - minY);
+
+                    const pad = 18;
+                    const availW = previewW - pad * 2;
+                    const availH = previewH - pad * 2;
+                    const scale = Math.min(availW / unionW, availH / unionH);
+                    currentScale = scale > 0 ? scale : 1;
+
+                    const originX = Math.round((previewW - unionW * scale) / 2 - minX * scale);
+                    const originY = Math.round((previewH - unionH * scale) / 2 - minY * scale);
+
+                    const newRectX = originX;
+                    const newRectY = originY;
+                    const newRectW = Math.max(2, Math.round(nw * scale));
+                    const newRectH = Math.max(2, Math.round(nh * scale));
+
+                    const oldRectX = Math.round(originX + ox * scale);
+                    const oldRectY = Math.round(originY + oy * scale);
+                    const oldRectW = Math.max(2, Math.round(oldW * scale));
+                    const oldRectH = Math.max(2, Math.round(oldH * scale));
+
+                    const ctx = previewCanvas.getContext("2d");
+                    if (ctx) {
+                        ctx.clearRect(0, 0, previewW, previewH);
+                        ctx.fillStyle = "#0c0e17";
+                        ctx.fillRect(0, 0, previewW, previewH);
+
+                        // 1. Draw checkerboard inside the New Canvas boundary
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(newRectX, newRectY, newRectW, newRectH);
+                        ctx.clip();
+                        const chk = 8;
+                        for (let cy = newRectY; cy < newRectY + newRectH; cy += chk) {
+                            for (let cx = newRectX; cx < newRectX + newRectW; cx += chk) {
+                                const isLight = ((Math.floor((cx - newRectX) / chk) + Math.floor((cy - newRectY) / chk)) & 1) === 0;
+                                ctx.fillStyle = isLight ? "#23283b" : "#181c2b";
+                                ctx.fillRect(cx, cy, chk, chk);
+                            }
+                        }
+                        if (st.backgroundColor && st.backgroundColor !== "transparent") {
+                            ctx.fillStyle = st.backgroundColor;
+                            ctx.globalAlpha = 0.45;
+                            ctx.fillRect(newRectX, newRectY, newRectW, newRectH);
+                            ctx.globalAlpha = 1.0;
+                        }
+                        ctx.restore();
+
+                        // 2. Draw Original Image ghosted outside New Canvas (cropped overflow visibility)
+                        ctx.save();
+                        ctx.globalAlpha = 0.32;
+                        ctx.drawImage(thumbCanvas, oldRectX, oldRectY, oldRectW, oldRectH);
+                        ctx.restore();
+
+                        // 3. Draw Original Image at full opacity clipped inside New Canvas
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(newRectX, newRectY, newRectW, newRectH);
+                        ctx.clip();
+                        ctx.globalAlpha = 1.0;
+                        ctx.drawImage(thumbCanvas, oldRectX, oldRectY, oldRectW, oldRectH);
+                        ctx.restore();
+
+                        // 4. Draw Original Image dashed gold outline
+                        ctx.save();
+                        ctx.strokeStyle = "#ffd54f";
+                        ctx.lineWidth = 1.5;
+                        ctx.setLineDash([4, 3]);
+                        ctx.strokeRect(oldRectX + 0.5, oldRectY + 0.5, Math.max(1, oldRectW - 1), Math.max(1, oldRectH - 1));
+                        ctx.restore();
+
+                        // 5. Draw New Canvas solid cyan outline
+                        ctx.save();
+                        ctx.strokeStyle = "#00e5ff";
+                        ctx.lineWidth = 1.75;
+                        ctx.strokeRect(newRectX + 0.5, newRectY + 0.5, Math.max(1, newRectW - 1), Math.max(1, newRectH - 1));
+                        ctx.restore();
+
+                        // 6. Draw Offset indicator vector line if offset is non-zero
+                        if (ox !== 0 || oy !== 0) {
+                            ctx.save();
+                            ctx.strokeStyle = "#ff6e40";
+                            ctx.fillStyle = "#ff6e40";
+                            ctx.lineWidth = 1.5;
+                            ctx.beginPath();
+                            ctx.moveTo(newRectX, newRectY);
+                            ctx.lineTo(oldRectX, oldRectY);
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.arc(oldRectX, oldRectY, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        }
+                    }
+
+                    const dW = nw - oldW;
+                    const dH = nh - oldH;
+                    const dWStr = dW >= 0 ? `+${dW}` : String(dW);
+                    const dHStr = dH >= 0 ? `+${dH}` : String(dH);
+                    infoEl.textContent = `${oldW}×${oldH}px → ${nw}×${nh}px (${dWStr}, ${dHStr}) • Offset: (${ox}, ${oy})px`;
+                    previewCanvas.setAttribute("data-preview-width", String(nw));
+                    previewCanvas.setAttribute("data-preview-height", String(nh));
+                    previewCanvas.setAttribute("data-preview-offset-x", String(ox));
+                    previewCanvas.setAttribute("data-preview-offset-y", String(oy));
+                };
+
+                // Interactive drag-to-offset on the preview canvas (like GIMP GimpOffsetArea)
+                let isDragging = false;
+                let dragStartClientX = 0;
+                let dragStartClientY = 0;
+                let dragStartOx = 0;
+                let dragStartOy = 0;
+                let dragScale = 1;
+
+                previewCanvas.addEventListener("mousedown", (ev: MouseEvent) => {
+                    if (ev.button !== 0) return;
+                    ev.preventDefault();
+                    const cur = getValues();
+                    isDragging = true;
+                    dragStartClientX = ev.clientX;
+                    dragStartClientY = ev.clientY;
+                    dragStartOx = Number(cur.offsetX) || 0;
+                    dragStartOy = Number(cur.offsetY) || 0;
+                    dragScale = currentScale > 0 ? currentScale : 1;
+                });
+
+                const onWinMouseMove = (ev: MouseEvent) => {
+                    if (!isDragging) return;
+                    if (!previewCanvas.isConnected) {
+                        isDragging = false;
+                        return;
+                    }
+                    const dx = Math.round((ev.clientX - dragStartClientX) / dragScale);
+                    const dy = Math.round((ev.clientY - dragStartClientY) / dragScale);
+                    setValues({
+                        offsetX: String(dragStartOx + dx),
+                        offsetY: String(dragStartOy + dy)
+                    });
+                };
+
+                const onWinMouseUp = () => {
+                    isDragging = false;
+                };
+
+                this.win.addEventListener("mousemove", onWinMouseMove);
+                this.win.addEventListener("mouseup", onWinMouseUp);
+
+                onChange((vals) => drawPreview(vals));
+                drawPreview(getValues());
+
+                previewBox.append(headerRow, previewCanvas, legendRow, controlsRow, infoEl);
+                return previewBox;
+            },
             submitLabel: "Resize Canvas",
             onSubmit: (vals) => {
                 const w = Math.max(1, Number(vals.width) || st.width);

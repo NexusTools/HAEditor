@@ -556,6 +556,11 @@ export class ModalDialogManager extends AbstractUIComponent {
         presets?: FormPresetOption[];
         fields: PromptFieldSpec[];
         submitLabel?: string;
+        customPreview?: (api: {
+            getValues: () => Record<string, string>;
+            setValues: (vals: Record<string, string>) => void;
+            onChange: (listener: (values: Record<string, string>) => void) => void;
+        }) => HTMLElement;
         onSubmit: (values: Record<string, string>) => void;
     }): void {
         this.closeDialog();
@@ -563,7 +568,10 @@ export class ModalDialogManager extends AbstractUIComponent {
         const backdrop = this.createElement("div", "ha-modal-backdrop", undefined, {
             id: "ha-modal-backdrop"
         });
-        const card = this.createElement("div", "ha-modal-card");
+        const card = this.createElement(
+            "div",
+            options.customPreview ? "ha-modal-card ha-modal-card-with-preview" : "ha-modal-card"
+        );
         const header = this.createElement("div", "ha-modal-header ha-fb-header");
         const titleSpan = this.createElement("span", undefined, options.title);
         const closeXBtn = this.createElement("button", "ha-icon-btn", "✕", {
@@ -582,14 +590,19 @@ export class ModalDialogManager extends AbstractUIComponent {
         const valueSetters: Record<string, (val: string) => void> = {};
         const valueGetters: Record<string, () => string> = {};
         const conditionalRows: Array<{ field: PromptFieldSpec; rowEl: HTMLElement }> = [];
+        const changeListeners: Array<(values: Record<string, string>) => void> = [];
         let firstFocusable: HTMLElement | null = null;
 
-        const refreshFieldVisibility = () => {
-            if (conditionalRows.length === 0) return;
+        const collectValues = (): Record<string, string> => {
             const currentValues: Record<string, string> = {};
             for (const [k, getter] of Object.entries(valueGetters)) {
                 currentValues[k] = getter();
             }
+            return currentValues;
+        };
+
+        const refreshFieldVisibility = () => {
+            const currentValues = collectValues();
             for (const { field, rowEl } of conditionalRows) {
                 const rule = field.visibleWhen;
                 if (!rule) continue;
@@ -604,6 +617,9 @@ export class ModalDialogManager extends AbstractUIComponent {
                 }
                 rowEl.style.display = visible ? "" : "none";
                 rowEl.setAttribute("data-field-visible", visible ? "true" : "false");
+            }
+            for (const fn of changeListeners) {
+                fn(currentValues);
             }
         };
 
@@ -630,6 +646,10 @@ export class ModalDialogManager extends AbstractUIComponent {
             presetBox.appendChild(pillsRow);
             body.appendChild(presetBox);
         }
+
+        const fieldsHost = options.customPreview
+            ? this.createElement("div", "ha-modal-fields-column")
+            : body;
 
         for (const field of options.fields) {
             const row = this.createElement("div", "ha-modal-field-row", undefined, {
@@ -764,7 +784,27 @@ export class ModalDialogManager extends AbstractUIComponent {
                 row.appendChild(chipsRow);
             }
 
-            body.appendChild(row);
+            fieldsHost.appendChild(row);
+        }
+
+        if (options.customPreview) {
+            const splitWrap = this.createElement("div", "ha-modal-split-preview-layout");
+            const previewEl = options.customPreview({
+                getValues: collectValues,
+                setValues: (vals: Record<string, string>) => {
+                    for (const [k, v] of Object.entries(vals)) {
+                        if (valueSetters[k]) {
+                            valueSetters[k](v);
+                        }
+                    }
+                    refreshFieldVisibility();
+                },
+                onChange: (listener: (values: Record<string, string>) => void) => {
+                    changeListeners.push(listener);
+                }
+            });
+            splitWrap.append(fieldsHost, previewEl);
+            body.appendChild(splitWrap);
         }
 
         refreshFieldVisibility();

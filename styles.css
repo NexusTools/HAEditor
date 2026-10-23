@@ -956,6 +956,151 @@ html, body, #app-root {
 .ha-modal-card {
   width: 520px;
   max-width: 94vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-modal-card-with-preview {
+  width: 720px;
+  max-width: 95vw;
+}
+
+.ha-modal-split-preview-layout {
+  display: grid;
+  grid-template-columns: 1fr 292px;
+  gap: 14px;
+  align-items: start;
+}
+
+.ha-modal-fields-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ha-canvas-size-preview-box {
+  background: #121521;
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ha-canvas-size-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ha-canvas-size-preview-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ha-accent);
+}
+
+.ha-canvas-size-preview-hint {
+  font-size: 10px;
+  color: var(--ha-text-muted);
+}
+
+.ha-canvas-size-preview-canvas {
+  width: 270px;
+  height: 176px;
+  border: 1px solid #2b3048;
+  border-radius: 5px;
+  background: #0c0e17;
+  cursor: grab;
+  display: block;
+}
+
+.ha-canvas-size-preview-canvas:active {
+  cursor: grabbing;
+}
+
+.ha-canvas-size-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-size: 10.5px;
+  color: var(--ha-text-muted);
+}
+
+.ha-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ha-legend-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.ha-legend-swatch.new-canvas {
+  border: 2px solid #00e5ff;
+  background: rgba(0, 229, 255, 0.14);
+}
+
+.ha-legend-swatch.orig-image {
+  border: 1.5px dashed #ffd54f;
+  background: rgba(255, 213, 79, 0.14);
+}
+
+.ha-canvas-size-preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ha-canvas-size-anchor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 24px);
+  grid-template-rows: repeat(3, 22px);
+  gap: 3px;
+}
+
+.ha-canvas-size-anchor-btn {
+  background: var(--ha-bg-card);
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ha-canvas-size-anchor-btn:hover {
+  border-color: var(--ha-accent);
+  color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.ha-canvas-size-btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.ha-canvas-size-preview-info {
+  font-size: 11px;
+  color: #cfd8ec;
+  background: #0e111b;
+  border: 1px solid #252a3f;
+  border-radius: 4px;
+  padding: 5px 8px;
+  text-align: center;
+  font-family: Consolas, monospace;
 }
 
 .ha-file-browser-card {
