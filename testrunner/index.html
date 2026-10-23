@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HAEditor NW.js Webview Test Harness</title>
+  <style>
+    body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; background: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+
+    #webview-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+    webview { width: 100%; height: 100%; border: none; opacity: 0.95; }
+
+    #test-runner-overlay {
+      pointer-events: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.25);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      text-align: center;
+    }
+
+    .overlay-card {
+      background: #1e1e2e;
+      border: 1px solid #313244;
+      padding: 30px 45px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      min-width: 420px;
+    }
+
+    .overlay-title { font-size: 22px; font-weight: bold; margin-bottom: 15px; color: #cba6f7; }
+    .overlay-status { font-size: 14px; margin-bottom: 15px; color: #89b4fa; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 380px; }
+    .overlay-metric { font-size: 18px; margin: 8px 0; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+    .status-running { color: #89b4fa; }
+    .status-passed { color: #a6e3a1; }
+    .status-failed { color: #f38ba8; }
+  </style>
+</head>
+<body>
+  <div id="webview-container">
+    <webview id="client-webview" allownw partition="trusted"></webview>
+  </div>
+
+  <div id="test-runner-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">🧪 HAEditor Live Webview Test Runner</div>
+      <div id="overlay-status" class="overlay-status">Initializing test harness...</div>
+      <div class="overlay-metric status-running">
+        <span>Completed:</span>
+        <span id="metric-current">0 of 0</span>
+      </div>
+      <div class="overlay-metric status-passed">
+        <span>✅ Tests Passed:</span>
+        <span id="metric-passed">0</span>
+      </div>
+      <div class="overlay-metric status-failed">
+        <span>❌ Tests Failed:</span>
+        <span id="metric-failed">0</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const http = require('http');
+      const fs = require('fs');
+      const path = require('path');
+
+      const cwd = process.cwd();
+      const projectRootDir = fs.existsSync(path.join(cwd, 'dist', 'src', 'haeditor-app.js'))
+        ? cwd
+        : path.resolve(cwd, '..');
+      const testResultsDir = path.join(projectRootDir, 'testrunner', 'test-results');
+      fs.mkdirSync(testResultsDir, { recursive: true });
+      const testLogPath = path.join(testResultsDir, 'desktop-tests.log');
+
+      const errorLogs = [];
+      const webview = document.getElementById('client-webview');
+      const overlayStatus = document.getElementById('overlay-status');
+      const metricCurrent = document.getElementById('metric-current');
+      const metricPassed = document.getElementById('metric-passed');
+      const metricFailed = document.getElementById('metric-failed');
+
+      let totalTests = 0;
+      let passedCount = 0;
+      let failedCount = 0;
+      let hasRunHarness = false;
+      let testServer = null;
+
+      function recordError(source, err) {
+        const errMsg = `[ERROR][${source}] ${err?.stack || err?.message || err}`;
+        errorLogs.push(errMsg);
+        console.error(errMsg);
+      }
+
+      function finishAndExit() {
+        try {
+          const totalPassed = passedCount;
+          let totalFailed = failedCount;
+
+          if (totalTests > 0 && (totalPassed + totalFailed) !== totalTests) {
+            recordError('TestCountMismatchError', `Test count mismatch: total expected ${totalTests}, but executed passed (${totalPassed}) + failed (${totalFailed}) = ${totalPassed + totalFailed}`);
+          }
+
+          if (errorLogs.length > 0 && totalFailed === 0) {
+            totalFailed = 1;
+          }
+
+          const totalAll = totalTests || (totalPassed + totalFailed);
+
+          const testLogLines = [
+            '==================================================',
+            'HAEditor Desktop Client Test Harness Log',
+            '==================================================',
+            `Completed at: ${new Date().toISOString()}`,
+            `Total Tests: ${totalAll}`,
+            `Passed: ${totalPassed}`,
+            `Failed: ${totalFailed}`,
+            '=================================================='
+          ];
+
+          if (errorLogs.length > 0) {
+            testLogLines.push('FAILURES & ERRORS:');
+            errorLogs.forEach(err => testLogLines.push(err));
+          } else {
+            testLogLines.push('SUCCESS: All tests completed cleanly.');
+          }
+
+          try {
+            fs.writeFileSync(testLogPath, testLogLines.join('\n'), 'utf-8');
+          } catch (e) {
+            console.error('Failed to write desktop-tests.log:', e);
+          }
+
+          const exitCode = (errorLogs.length > 0 || totalFailed > 0) ? 1 : 0;
+          console.log(`Test runner exiting with code ${exitCode}`);
+          process.exit(exitCode);
+        } finally {
+          process.exit(1);
+        }
+      }
+
+      try {
+        // Global 20-second hard deadline timer
+        setTimeout(() => {
+          recordError('GlobalHarnessTimeout', 'Test runner harness timed out after 20 seconds.');
+          finishAndExit();
+        }, 20000);
+
+        window.onerror = function(message, source, lineno, colno, error) {
+          recordError('HostWindowOnError', error || message);
+          finishAndExit();
+        };
+
+        window.addEventListener('unhandledrejection', function(e) {
+          recordError('HostUnhandledRejection', e.reason);
+          finishAndExit();
+        });
+
+        function triggerHarness() {
+          if (hasRunHarness) return;
+          hasRunHarness = true;
+          runJestWebviewHarness();
+        }
+
+        webview.addEventListener('console-message', (e) => {
+          if (e.level >= 2) {
+            recordError(`WebviewConsole[L${e.level}]`, e.message);
+          }
+        });
+
+        webview.addEventListener('loadabort', (e) => {
+          recordError('WebviewLoadAbort', `Failed to load HAEditor client: ${e.reason}`);
+          finishAndExit();
+        });
+
+        webview.addEventListener('contentload', () => triggerHarness());
+
+        let aiTurnCounter = 0;
+        let firstAiRequestPayload = null;
+
+        testServer = http.createServer((req, res) => {
+          const reqUrl = req.url || '/';
+          const reqPath = reqUrl.split('?')[0];
+
+          if (req.method === 'GET' && reqPath === '/v1/ai/last-request') {
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ turnCount: aiTurnCounter, firstPayload: firstAiRequestPayload }));
+            return;
+          }
+
+          if (req.method === 'POST' && reqPath === '/v1/chat/completions') {
+            let body = '';
+            req.on('data', chunk => (body += chunk.toString()));
+            req.on('end', () => {
+              aiTurnCounter++;
+              try {
+                const parsed = JSON.parse(body);
+                if (aiTurnCounter === 1) {
+                  firstAiRequestPayload = parsed;
+                }
+              } catch (_e) {}
+
+              res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*'
+              });
+
+              if (aiTurnCounter === 1) {
+                res.write('data: ' + JSON.stringify({
+                  choices: [{ delta: { reasoning_content: 'Planning a golden star vector shape at (240, 150)...' }, finish_reason: null }]
+                }) + '\n\n');
+
+                res.write('data: ' + JSON.stringify({
+                  choices: [{
+                    delta: {
+                      tool_calls: [{
+                        index: 0,
+                        id: 'call_star_1',
+                        function: { name: 'draw_vector_shape', arguments: '{"kind":"star","x":240,' }
+                      }]
+                    },
+                    finish_reason: null
+                  }]
+                }) + '\n\n');
+
+                res.write('data: ' + JSON.stringify({
+                  choices: [{
+                    delta: {
+                      tool_calls: [{
+                        index: 0,
+                        function: { arguments: '"y":150,"width":70,"height":70,"sides":5,"fill":"#ffcc00"}' }
+                      }]
+                    },
+                    finish_reason: 'tool_calls'
+                  }]
+                }) + '\n\n');
+
+                res.write('data: [DONE]\n\n');
+                res.end();
+              } else {
+                res.write('data: ' + JSON.stringify({
+                  choices: [{ delta: { content: 'I have drawn the **golden star** on the vector layer!' }, finish_reason: 'stop' }]
+                }) + '\n\n');
+                res.write('data: [DONE]\n\n');
+                res.end();
+              }
+            });
+            return;
+          }
+
+          const relPath = reqPath === '/' ? 'index.html' : (reqPath.startsWith('/') ? reqPath.slice(1) : reqPath);
+          const filePath = path.join(projectRootDir, relPath);
+
+          if (relPath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes = {
+              '.html': 'text/html',
+              '.js': 'application/javascript',
+              '.css': 'text/css',
+              '.json': 'application/json',
+              '.png': 'image/png',
+              '.ico': 'image/x-icon'
+            };
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            res.writeHead(200, { 'Content-Type': contentType, 'Access-Control-Allow-Origin': '*' });
+            fs.createReadStream(filePath).pipe(res);
+          } else {
+            if (reqPath !== '/favicon.ico') {
+              const errStr = `HTTP 404 Not Found: ${reqPath} (resolved: ${filePath})`;
+              recordError('Http404Error', errStr);
+            }
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end(`404 Not Found: ${reqPath}`);
+          }
+        });
+
+        testServer.listen(0, '127.0.0.1', () => {
+          const port = testServer.address().port;
+          webview.src = `http://127.0.0.1:${port}/index.html`;
+        });
+
+        function execScriptWithTimeout(code, timeoutMs = 1500) {
+          return new Promise((resolve) => {
+            let done = false;
+            const timer = setTimeout(() => {
+              if (!done) {
+                done = true;
+                resolve(null);
+              }
+            }, timeoutMs);
+
+            try {
+              webview.executeScript({ code }, (results) => {
+                if (!done) {
+                  done = true;
+                  clearTimeout(timer);
+                  resolve(results && results[0] !== undefined ? results[0] : null);
+                }
+              });
+            } catch (_e) {
+              if (!done) {
+                done = true;
+                clearTimeout(timer);
+                resolve(null);
+              }
+            }
+          });
+        }
+
+        async function waitForScreenLoad() {
+          for (let i = 0; i < 40; i++) {
+            const res = await execScriptWithTimeout(`
+              (function() {
+                const shell = document.getElementById('ha-editor-shell');
+                const canvas = document.getElementById('ha-display-canvas');
+                const sharedPanel = document.getElementById('ha-shared-objects-panel');
+                return !!(shell && canvas && sharedPanel);
+              })();
+            `, 500);
+            if (res === true || res === 'true') return true;
+            await new Promise(r => setTimeout(r, 100));
+          }
+          return false;
+        }
+
+        async function executeWebviewTest(code, timeoutMs = 4000) {
+          return new Promise((resolve) => {
+            let finished = false;
+
+            const timer = setTimeout(() => {
+              if (!finished) {
+                finished = true;
+                resolve({ ok: false, error: `Test timed out after ${timeoutMs}ms` });
+              }
+            }, timeoutMs);
+
+            execScriptWithTimeout(`
+              (function() {
+                window.__testDone = false;
+                window.__testErrors = [];
+                (async function() {
+                  try {
+                    ${code}
+                  } catch (e) {
+                    window.__testErrors.push(e.stack || e.message || String(e));
+                  } finally {
+                    window.__testDone = true;
+                  }
+                })();
+                return 'started';
+              })();
+            `, 1000).then(() => {
+              const pollInterval = setInterval(async () => {
+                if (finished) {
+                  clearInterval(pollInterval);
+                  return;
+                }
+                const rawData = await execScriptWithTimeout(`(function() { return JSON.stringify({ done: !!window.__testDone, errors: window.__testErrors || [] }); })();`, 500);
+                try {
+                  const data = rawData ? JSON.parse(rawData) : null;
+                  if (data && data.done) {
+                    finished = true;
+                    clearTimeout(timer);
+                    clearInterval(pollInterval);
+                    resolve({ ok: data.errors.length === 0, errors: data.errors });
+                  }
+                } catch (_e) {}
+              }, 80);
+            });
+          });
+        }
+
+        async function runJestWebviewHarness() {
+          try {
+            const INDIVIDUAL_LIVE_TESTS = [
+              {
+                id: 'dom_layout',
+                name: 'HAEditor Blank Startup, HACanvas Splash Screen (New/Open Buttons) & Closeable Tabs (×)',
+                timeoutMs: 4000,
+                code: `
+                  const requiredIds = [
+                    'ha-editor-shell',
+                    'ha-top-menubar',
+                    'ha-tool-options-bar',
+                    'ha-left-toolbox',
+                    'ha-splash-screen',
+                    'btn-splash-new-canvas',
+                    'btn-splash-open-file',
+                    'ha-display-canvas',
+                    'ha-overlay-canvas',
+                    'panel-ai-assistant',
+                    'ha-shared-objects-panel',
+                    'ha-library-panel',
+                    'ha-layers-panel',
+                    'ha-filters-panel',
+                    'ha-timeline-panel',
+                    'ha-status-bar'
+                  ];
+                  for (const id of requiredIds) {
+                    if (!document.getElementById(id)) {
+                      window.__testErrors.push('Missing required DOM element #' + id);
+                    }
+                  }
+
+                  // 1. Verify blank startup: splash screen visible, 0 tabs, 0 layers, 0 shared objects
+                  const splashEl = document.getElementById('ha-splash-screen');
+                  const tabsBar = document.getElementById('ha-viewport-tabs-bar');
+                  if (!splashEl || splashEl.classList.contains('ha-hidden') || !splashEl.textContent.includes('HACanvas')) {
+                    window.__testErrors.push('Expected #ha-splash-screen describing HACanvas to be visible on blank startup');
+                    return;
+                  }
+                  if (!tabsBar || !tabsBar.classList.contains('ha-hidden') || tabsBar.querySelectorAll('.ha-viewport-tab').length !== 0) {
+                    window.__testErrors.push('Expected 0 tabs on initial splash screen');
+                    return;
+                  }
+                  if (document.querySelectorAll('#ha-shared-objects-panel .ha-shared-obj-card').length !== 0) {
+                    window.__testErrors.push('Expected 0 Shared Objects initially on blank startup');
+                    return;
+                  }
+                  if (document.querySelectorAll('#ha-layers-panel .ha-layer-row').length !== 0) {
+                    window.__testErrors.push('Expected 0 layers initially on blank startup');
+                    return;
+                  }
+
+                  // 2. Click "New" button on Splash Screen -> submit modal -> verify tab appears with × close button
+                  document.getElementById('btn-splash-new-canvas').click();
+                  const modalSubmit = document.getElementById('ha-modal-submit');
+                  if (!modalSubmit) {
+                    window.__testErrors.push('Clicking #btn-splash-new-canvas did not open New Canvas dialog');
+                    return;
+                  }
+                  modalSubmit.click();
+
+                  if (!splashEl.classList.contains('ha-hidden')) {
+                    window.__testErrors.push('Expected #ha-splash-screen to hide after creating a new canvas');
+                  }
+                  const mainTab = document.getElementById('tab-main-canvas');
+                  const closeMainTabBtn = document.getElementById('btn-close-main-canvas-tab');
+                  if (!mainTab || !closeMainTabBtn || closeMainTabBtn.textContent !== '×') {
+                    window.__testErrors.push('Expected #tab-main-canvas with × close button (#btn-close-main-canvas-tab) after creating canvas');
+                    return;
+                  }
+
+                  // 3. Click × on Main Canvas tab -> verify tab closes and returns to Splash Screen with 0 tabs
+                  closeMainTabBtn.click();
+                  if (splashEl.classList.contains('ha-hidden') || tabsBar.querySelectorAll('.ha-viewport-tab').length !== 0) {
+                    window.__testErrors.push('Expected clicking × on Main Canvas tab to close document and return to splash screen with 0 tabs');
+                    return;
+                  }
+
+                  // 4. Create a fresh canvas via Splash Screen "New" button for subsequent interactive tests
+                  document.getElementById('btn-splash-new-canvas').click();
+                  document.getElementById('ha-modal-submit').click();
+                `
+              },
+              {
+                id: 'shared_objects_categorized_tree',
+                name: 'Shared Objects Categorized Folder Tree & Modal Creation',
+                timeoutMs: 3000,
+                code: `
+                  const createBtn = document.getElementById('btn-create-shared-object');
+                  if (!createBtn) {
+                    window.__testErrors.push('Missing #btn-create-shared-object');
+                  } else {
+                    createBtn.click();
+                  }
+                  const nameInput = document.querySelector('#ha-modal-backdrop [data-field-key="name"]');
+                  const catInput = document.querySelector('#ha-modal-backdrop [data-field-key="category"]');
+                  const submitBtn = document.getElementById('ha-modal-submit');
+                  if (!nameInput || !submitBtn) {
+                    window.__testErrors.push('Create Shared Object modal dialog did not open');
+                  } else {
+                    nameInput.value = 'UI/Buttons/PrimaryCTA';
+                    if (catInput) catInput.value = 'UI/Buttons';
+                    submitBtn.click();
+                  }
+                  const panel = document.getElementById('ha-shared-objects-panel');
+                  if (!panel || !panel.textContent.includes('PrimaryCTA') || !panel.textContent.includes('Buttons')) {
+                    window.__testErrors.push('Shared Object PrimaryCTA or Buttons category folder not found in #ha-shared-objects-panel');
+                  }
+                `
+              },
+              {
+                id: 'shared_object_in_place_and_tab_editing',
+                name: 'Shared Object In-Place (Darkened Canvas) & Isolated Tab Editing with × Close Button',
+                timeoutMs: 4000,
+                code: `
+                  const sharedCard = document.querySelector('#ha-shared-objects-panel .ha-shared-obj-card');
+                  if (!sharedCard) {
+                    window.__testErrors.push('Missing created Shared Object card in #ha-shared-objects-panel');
+                    return;
+                  }
+                  const sharedId = sharedCard.getAttribute('data-object-id');
+                  sharedCard.click();
+
+                  const banner = document.getElementById('ha-viewport-mode-banner');
+                  if (!banner || !banner.classList.contains('in-place')) {
+                    window.__testErrors.push('In-Place editing banner not active after clicking Shared Object card');
+                  }
+                  const switchTabBtn = document.getElementById('btn-switch-to-isolated-tab');
+                  if (!switchTabBtn) {
+                    window.__testErrors.push('Missing #btn-switch-to-isolated-tab button');
+                  } else {
+                    switchTabBtn.click();
+                  }
+                  const bannerAfterTab = document.getElementById('ha-viewport-mode-banner');
+                  const tabEl = document.querySelector('[data-shared-tab-id="' + sharedId + '"]');
+                  const tabCloseBtn = tabEl ? tabEl.querySelector('.ha-tab-close') : null;
+                  if (!bannerAfterTab || !bannerAfterTab.classList.contains('isolated-tab') || !tabEl || !tabCloseBtn) {
+                    window.__testErrors.push('Expected isolated-tab banner and tab element with × close button after clicking switch button');
+                    return;
+                  }
+                  // Click × close button on the Shared Object tab
+                  tabCloseBtn.click();
+                  const bannerAfterClose = document.getElementById('ha-viewport-mode-banner');
+                  if (bannerAfterClose && bannerAfterClose.classList.contains('active')) {
+                    window.__testErrors.push('Expected mode banner to deactivate after closing Shared Object tab via ×');
+                  }
+                `
+              },
+              {
+                id: 'reusable_library_and_gimp_filters',
+                name: 'OS Config Reusable Library, GIMP Filters & Custom Context Menu',
+                timeoutMs: 4000,
+                code: `
+                  const saveLibBtn = document.getElementById('btn-save-active-to-library');
+                  if (!saveLibBtn) {
+                    window.__testErrors.push('Missing #btn-save-active-to-library button');
+                  } else {
+                    saveLibBtn.click();
+                  }
+                  const libPanel = document.getElementById('ha-library-panel');
+                  const libCards = libPanel ? libPanel.querySelectorAll('.ha-shared-obj-card') : [];
+                  if (libCards.length === 0) {
+                    window.__testErrors.push('Saved Library Object card not rendered in #ha-library-panel');
+                  }
+                  const invertChip = document.querySelector('#ha-filters-panel [data-filter-type="invert"]');
+                  const applyFilterBtn = document.getElementById('btn-apply-selected-filter');
+                  if (!invertChip || !applyFilterBtn) {
+                    window.__testErrors.push('Missing GIMP filter controls in #ha-filters-panel');
+                  } else {
+                    invertChip.click();
+                    applyFilterBtn.click();
+                  }
+                  const overlayCanvas = document.getElementById('ha-overlay-canvas');
+                  if (overlayCanvas) {
+                    overlayCanvas.dispatchEvent(new MouseEvent('contextmenu', {
+                      bubbles: true,
+                      cancelable: true,
+                      clientX: 140,
+                      clientY: 140
+                    }));
+                  }
+                  const menuEl = document.querySelector('.ha-context-menu');
+                  if (!menuEl || !menuEl.textContent.includes('GIMP Pixel Filters')) {
+                    window.__testErrors.push('Custom GIMP right-click context menu failed to open on canvas');
+                  }
+                `
+              },
+              {
+                id: 'gimp_file_menu_and_file_browser',
+                name: 'GIMP File Menu (Open, Open as Layers, Import Submenu) & Interactive File Browser',
+                timeoutMs: 4000,
+                code: `
+                  const fileMenuBtn = document.getElementById('menu-file');
+                  if (!fileMenuBtn) {
+                    window.__testErrors.push('Missing #menu-file button');
+                  } else {
+                    fileMenuBtn.click();
+                  }
+                  const menuEl = document.querySelector('.ha-context-menu');
+                  if (!menuEl || !menuEl.textContent.includes('Open...') || !menuEl.textContent.includes('Open as Layers...') || !menuEl.textContent.includes('Import')) {
+                    window.__testErrors.push('File menu missing GIMP Open..., Open as Layers..., or Import items');
+                  }
+                  const items = Array.from(document.querySelectorAll('.ha-context-menu-item'));
+                  const openItem = items.find(el => el.textContent.includes('Open...'));
+                  if (!openItem) {
+                    window.__testErrors.push('Could not find Open... item in File menu');
+                  } else {
+                    openItem.click();
+                  }
+                  const fbDialog = document.getElementById('ha-file-browser-dialog');
+                  const fbFileList = document.getElementById('ha-fb-file-list');
+                  const fbFilter = document.getElementById('ha-fb-filter-select');
+                  if (!fbDialog || !fbFileList || !fbFilter) {
+                    window.__testErrors.push('GIMP File Browser dialog (#ha-file-browser-dialog) did not open when clicking File -> Open...');
+                  }
+                  const cancelBtn = document.getElementById('ha-modal-cancel');
+                  if (cancelBtn) cancelBtn.click();
+                `
+              },
+              {
+                id: 'ai_studio_brain_dropdown_and_live_tool_streaming',
+                name: 'AI Studio (LM Studio localhost:1234), 3-Level Brain Dropdown (Low/Medium/Max) & Live Tool Generation',
+                timeoutMs: 5000,
+                code: `
+                  const aiPanel = document.getElementById('panel-ai-assistant');
+                  const chatInput = document.getElementById('ha-ai-chat-input');
+                  const sendBtn = document.getElementById('ha-ai-send-btn');
+                  const brainBtn = document.getElementById('ha-ai-brain-btn');
+                  const brainDropdown = document.getElementById('ha-ai-brain-dropdown');
+
+                  if (!aiPanel || !chatInput || !sendBtn || !brainBtn || !brainDropdown) {
+                    window.__testErrors.push('Missing AI Studio panel or controls (#panel-ai-assistant, #ha-ai-chat-input, #ha-ai-send-btn, #ha-ai-brain-btn)');
+                    return;
+                  }
+
+                  if (!aiPanel.textContent.includes('http://localhost:1234')) {
+                    window.__testErrors.push('AI Studio panel does not display default LM Studio URL http://localhost:1234');
+                  }
+
+                  // Click the Brain button to open the 3-level reasoning dropdown
+                  brainBtn.click();
+                  const lowOpt = document.getElementById('ha-ai-reasoning-low');
+                  const medOpt = document.getElementById('ha-ai-reasoning-medium');
+                  const maxOpt = document.getElementById('ha-ai-reasoning-max');
+                  if (brainDropdown.style.display === 'none' || !lowOpt || !medOpt || !maxOpt) {
+                    window.__testErrors.push('Brain dropdown (#ha-ai-brain-dropdown) did not open with low, medium, and max options');
+                    return;
+                  }
+
+                  // Point data-lm-studio-url to our live local SSE test server to test end-to-end HTTP SSE streaming
+                  aiPanel.setAttribute('data-lm-studio-url', window.location.origin);
+                  try {
+                    chatInput.value = 'Draw a golden star at 240, 150';
+                    // Click the 'max' option in the Brain dropdown to select Max Reasoning and trigger streaming send
+                    maxOpt.click();
+
+                    // Wait for both streaming turns to complete and render the completed tool bubble + final message
+                    for (let i = 0; i < 50; i++) {
+                      const doneTool = document.querySelector('#ha-ai-chat-container .ha-ai-tool-bubble.completed');
+                      const containerTxt = document.getElementById('ha-ai-chat-container').textContent || '';
+                      if (doneTool && containerTxt.includes('golden star')) break;
+                      await new Promise(r => setTimeout(r, 40));
+                    }
+
+                    const verifyRes = await fetch('/v1/ai/last-request');
+                    const verifyData = await verifyRes.json();
+
+                    if (!verifyData.firstPayload || verifyData.firstPayload.reasoning_effort !== 'high' || verifyData.firstPayload.reasoning_level !== 'max') {
+                      window.__testErrors.push('Expected Max reasoning option to send reasoning_effort="high" and reasoning_level="max"');
+                    }
+
+                    const completedToolBubble = document.querySelector('#ha-ai-chat-container .ha-ai-tool-bubble.completed');
+                    const chatText = document.getElementById('ha-ai-chat-container').textContent || '';
+                    if (!completedToolBubble || !completedToolBubble.textContent.includes('Drew vector star')) {
+                      window.__testErrors.push('Expected completed live tool bubble (.ha-ai-tool-bubble.completed) with "Drew vector star", actual chatText=' + chatText);
+                    }
+                    if (!chatText.includes('golden star')) {
+                      window.__testErrors.push('Expected final assistant markdown response in #ha-ai-chat-container');
+                    }
+                  } finally {
+                    aiPanel.removeAttribute('data-lm-studio-url');
+                  }
+                `
+              },
+              {
+                id: 'gimp_menubar_hover_autoopen_edit_menu_and_ctrl_z',
+                name: 'GIMP Full Menubar, Hover Auto-Opening Across Menus/Submenus & Ctrl+Z / Ctrl+Y Undo/Redo',
+                timeoutMs: 5000,
+                code: `
+                  const expectedMenuIds = [
+                    'menu-file', 'menu-edit', 'menu-select', 'menu-view',
+                    'menu-image', 'menu-layer', 'menu-colors', 'menu-tools',
+                    'menu-filters', 'menu-vector', 'menu-shared-objects',
+                    'menu-library', 'menu-windows', 'menu-ai-studio', 'menu-help'
+                  ];
+                  for (const mid of expectedMenuIds) {
+                    if (!document.getElementById(mid)) {
+                      window.__testErrors.push('Missing top-level GIMP menubar button #' + mid);
+                      return;
+                    }
+                  }
+
+                  // 1. Click File menu to open it, then mouseover Edit, View, Image, Layer, Colors to verify hover auto-switch
+                  const fileBtn = document.getElementById('menu-file');
+                  const editBtn = document.getElementById('menu-edit');
+                  const viewBtn = document.getElementById('menu-view');
+                  const imageBtn = document.getElementById('menu-image');
+                  fileBtn.click();
+
+                  let activeMenu = document.querySelector('.ha-context-menu');
+                  if (!activeMenu || activeMenu.getAttribute('data-anchor-id') !== 'menu-file') {
+                    window.__testErrors.push('Expected File menu dropdown to open on click');
+                    return;
+                  }
+
+                  // Hover over Edit menu button while File menu is open
+                  editBtn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                  activeMenu = document.querySelector('.ha-context-menu');
+                  if (!activeMenu || activeMenu.getAttribute('data-anchor-id') !== 'menu-edit') {
+                    window.__testErrors.push('Expected hovering over #menu-edit while a menu is open to auto-open the Edit menu');
+                    return;
+                  }
+
+                  // Check Edit menu contains Undo, Redo, Cut, Copy, Paste, Paste as, Buffer, Clear, Fill, Stroke Selection, Preferences
+                  const editText = activeMenu.textContent || '';
+                  for (const reqLabel of ['Undo', 'Redo', 'Cut', 'Copy', 'Paste', 'Clear', 'Fill with Foreground Color', 'Stroke Selection']) {
+                    if (!editText.includes(reqLabel)) {
+                      window.__testErrors.push('Edit menu missing expected GIMP item: ' + reqLabel);
+                    }
+                  }
+
+                  // Hover over "Paste as" submenu item inside Edit menu
+                  const pasteAsRow = document.getElementById('menu-edit-paste-as');
+                  const clearRow = document.getElementById('menu-edit-clear');
+                  if (!pasteAsRow || !clearRow) {
+                    window.__testErrors.push('Missing #menu-edit-paste-as or #menu-edit-clear in Edit menu');
+                    return;
+                  }
+                  pasteAsRow.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                  if (!pasteAsRow.querySelector('.ha-context-submenu')) {
+                    window.__testErrors.push('Expected hovering #menu-edit-paste-as to open nested submenu');
+                  }
+
+                  // Hover over non-submenu item (#menu-edit-clear) and verify sibling submenu closes
+                  clearRow.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                  if (pasteAsRow.querySelector('.ha-context-submenu')) {
+                    window.__testErrors.push('Expected hovering sibling item #menu-edit-clear to close #menu-edit-paste-as submenu');
+                  }
+
+                  // Hover over View and Image top-level menu buttons
+                  viewBtn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                  activeMenu = document.querySelector('.ha-context-menu');
+                  if (!activeMenu || activeMenu.getAttribute('data-anchor-id') !== 'menu-view') {
+                    window.__testErrors.push('Expected mouseover on #menu-view to auto-switch to View menu');
+                  }
+                  imageBtn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                  activeMenu = document.querySelector('.ha-context-menu');
+                  if (!activeMenu || activeMenu.getAttribute('data-anchor-id') !== 'menu-image') {
+                    window.__testErrors.push('Expected mouseover on #menu-image to auto-switch to Image menu');
+                  }
+
+                  // Close open menu via Escape key
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                  if (document.querySelector('.ha-context-menu')) {
+                    window.__testErrors.push('Expected Escape key to close the active menu');
+                  }
+
+                  // 2. Test Ctrl+Z (Undo) and Ctrl+Y (Redo) keyboard shortcuts on canvas edits via DOM
+                  const layersPanel = document.getElementById('ha-layers-panel');
+                  const countBefore = layersPanel ? layersPanel.querySelectorAll('.ha-layer-row').length : 0;
+
+                  // Open Layer menu and click "New Vector Layer..."
+                  const layerMenuBtn = document.getElementById('menu-layer');
+                  layerMenuBtn.click();
+                  const newVecLayerItem = document.getElementById('menu-layer-new-vector');
+                  if (!newVecLayerItem) {
+                    window.__testErrors.push('Missing #menu-layer-new-vector in Layer menu');
+                    return;
+                  }
+                  newVecLayerItem.click();
+
+                  const countAfterAdd = document.querySelectorAll('#ha-layers-panel .ha-layer-row').length;
+                  if (countAfterAdd !== countBefore + 1) {
+                    window.__testErrors.push('Expected layer count to increase by 1 after Layer -> New Vector Layer (expected ' + (countBefore + 1) + ', got ' + countAfterAdd + ')');
+                    return;
+                  }
+
+                  // Dispatch Ctrl+Z on window to Undo
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+                  const countAfterUndo = document.querySelectorAll('#ha-layers-panel .ha-layer-row').length;
+                  if (countAfterUndo !== countBefore) {
+                    window.__testErrors.push('Expected Ctrl+Z to undo New Vector Layer (expected ' + countBefore + ', got ' + countAfterUndo + ')');
+                  }
+
+                  // Dispatch Ctrl+Y on window to Redo
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }));
+                  const countAfterRedo = document.querySelectorAll('#ha-layers-panel .ha-layer-row').length;
+                  if (countAfterRedo !== countBefore + 1) {
+                    window.__testErrors.push('Expected Ctrl+Y to redo New Vector Layer (expected ' + (countBefore + 1) + ', got ' + countAfterRedo + ')');
+                  }
+
+                  // Also test Edit -> Undo via the Edit menu click
+                  editBtn.click();
+                  const editUndoItem = document.getElementById('menu-edit-undo');
+                  if (!editUndoItem || editUndoItem.classList.contains('disabled')) {
+                    window.__testErrors.push('Expected #menu-edit-undo to be enabled after Redo');
+                  } else {
+                    editUndoItem.click();
+                  }
+                  const countAfterMenuUndo = document.querySelectorAll('#ha-layers-panel .ha-layer-row').length;
+                  if (countAfterMenuUndo !== countBefore) {
+                    window.__testErrors.push('Expected clicking Edit -> Undo to restore layer count to ' + countBefore);
+                  }
+                `
+              },
+              {
+                id: 'context_sensitive_left_toolbox_vector_vs_raster',
+                name: 'Context-Sensitive Left Toolbox (Vector Tools on Vector Layer, Raster Tools on Raster Layer)',
+                timeoutMs: 4000,
+                code: `
+                  const vecLayerRow = document.querySelector('#ha-layers-panel .ha-layer-row[data-layer-id="layer_2"]');
+                  const rasLayerRow = document.querySelector('#ha-layers-panel .ha-layer-row[data-layer-id="layer_1"]');
+                  if (!vecLayerRow || !rasLayerRow) {
+                    window.__testErrors.push('Missing layer_1 or layer_2 row in #ha-layers-panel');
+                    return;
+                  }
+
+                  // 1. Click Vector layer (layer_2) -> verify Left Toolbox shows ONLY Vector / Inkscape tools
+                  vecLayerRow.click();
+                  let toolbox = document.getElementById('ha-left-toolbox');
+                  let ctxLabel = document.getElementById('ha-toolbox-context-label');
+                  if (!toolbox || toolbox.getAttribute('data-toolbox-context') !== 'vector') {
+                    window.__testErrors.push('Expected #ha-left-toolbox data-toolbox-context="vector" when editing a vector layer');
+                    return;
+                  }
+                  if (!ctxLabel || !ctxLabel.textContent.includes('VECTOR')) {
+                    window.__testErrors.push('Expected #ha-toolbox-context-label to show VECTOR / INKSCAPE');
+                  }
+                  if (!document.getElementById('tool-btn-vector_select') || !document.getElementById('tool-btn-vector_star')) {
+                    window.__testErrors.push('Expected vector tool buttons (#tool-btn-vector_select, #tool-btn-vector_star) in left toolbox on vector layer');
+                  }
+                  if (document.getElementById('tool-btn-raster_brush') || document.getElementById('tool-btn-raster_flood_fill')) {
+                    window.__testErrors.push('Did not expect raster tool buttons in left toolbox when editing a vector layer');
+                  }
+
+                  // 2. Click Raster layer (layer_1) -> verify Left Toolbox switches to ONLY Raster / GIMP tools
+                  rasLayerRow.click();
+                  toolbox = document.getElementById('ha-left-toolbox');
+                  ctxLabel = document.getElementById('ha-toolbox-context-label');
+                  if (!toolbox || toolbox.getAttribute('data-toolbox-context') !== 'raster') {
+                    window.__testErrors.push('Expected #ha-left-toolbox data-toolbox-context="raster" when editing a raster layer');
+                    return;
+                  }
+                  if (!ctxLabel || !ctxLabel.textContent.includes('RASTER')) {
+                    window.__testErrors.push('Expected #ha-toolbox-context-label to show RASTER / GIMP');
+                  }
+                  if (!document.getElementById('tool-btn-raster_brush') || !document.getElementById('tool-btn-raster_flood_fill') || !document.getElementById('tool-btn-select_rect')) {
+                    window.__testErrors.push('Expected raster & selection tool buttons in left toolbox when editing a raster layer');
+                  }
+                  if (document.getElementById('tool-btn-vector_select') || document.getElementById('tool-btn-vector_rect')) {
+                    window.__testErrors.push('Did not expect vector tool buttons in left toolbox when editing a raster layer');
+                  }
+
+                  // 3. Switch back to Vector layer (layer_2) -> verify Left Toolbox returns to Vector tools
+                  vecLayerRow.click();
+                  toolbox = document.getElementById('ha-left-toolbox');
+                  if (!toolbox || toolbox.getAttribute('data-toolbox-context') !== 'vector' || !document.getElementById('tool-btn-vector_select')) {
+                    window.__testErrors.push('Expected left toolbox to return to vector tools after clicking vector layer');
+                  }
+                `
+              }
+            ];
+
+            const { TestRunner } = require(path.join(projectRootDir, 'dist', 'src', 'tests', 'TestRunner.js'));
+            const { registerHaEditorTestSuites } = require(path.join(projectRootDir, 'dist', 'src', 'tests', 'HaEditorSuites.js'));
+
+            const runner = TestRunner.getInstance();
+            runner.reset();
+            registerHaEditorTestSuites(runner);
+
+            totalTests = runner.totalCasesCount + INDIVIDUAL_LIVE_TESTS.length;
+            metricCurrent.textContent = `0 of ${totalTests}`;
+            overlayStatus.textContent = `Running ${totalTests} test suites...`;
+
+            const screenLoaded = await waitForScreenLoad();
+            if (!screenLoaded) {
+              recordError('WebviewScreenTimeout', 'HAEditor shell failed to load within 4 seconds.');
+            }
+
+            const jestSummary = await runner.runAll(5000);
+            passedCount += jestSummary.passed;
+            failedCount += jestSummary.failed;
+            metricPassed.textContent = `${passedCount}`;
+            metricFailed.textContent = `${failedCount}`;
+
+            if (jestSummary.failures && jestSummary.failures.length > 0) {
+              for (const f of jestSummary.failures) {
+                recordError(`JestSuite[${f.suiteName}]`, `${f.testName} -> ${f.error?.message || f.error}`);
+              }
+            }
+
+            const totalSuites = INDIVIDUAL_LIVE_TESTS.length;
+            for (let i = 0; i < totalSuites; i++) {
+              const spec = INDIVIDUAL_LIVE_TESTS[i];
+              overlayStatus.textContent = `Running [${i + 1}/${totalSuites}]: ${spec.name}`;
+              metricCurrent.textContent = `${runner.totalCasesCount + i + 1} of ${totalTests}`;
+
+              const res = await executeWebviewTest(spec.code, spec.timeoutMs);
+              if (res.ok) {
+                passedCount++;
+                metricPassed.textContent = `${passedCount}`;
+              } else {
+                failedCount++;
+                metricFailed.textContent = `${failedCount}`;
+                const errs = res.errors || [res.error || 'Unknown error'];
+                errs.forEach(err => recordError(spec.id, err));
+              }
+            }
+
+            overlayStatus.textContent = 'All tests completed!';
+            metricCurrent.textContent = `${totalTests} of ${totalTests}`;
+          } catch (err) {
+            recordError('TestRunnerExecution', err);
+          } finally {
+            finishAndExit();
+          }
+        }
+      } catch (scriptErr) {
+        recordError('TopLevelScriptError', scriptErr);
+        finishAndExit();
+      }
+    })();
+  </script>
+</body>
+</html>

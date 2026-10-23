@@ -1,0 +1,26 @@
+{
+  "name": "haeditor-testrunner",
+  "version": "1.0.0",
+  "main": "index.html",
+  "node-remote": [
+    "http://*",
+    "https://*"
+  ],
+  "chromium-args": "--allow-file-access-from-files --allow-file-access",
+  "window": {
+    "title": "HAEditor NW.js Webview Test Harness",
+    "width": 1280,
+    "height": 850,
+    "show": true
+  },
+  "webview": {
+    "partitions": [
+      {
+        "name": "trusted",
+        "accessible_resources": [
+          "*"
+        ]
+      }
+    ]
+  }
+}

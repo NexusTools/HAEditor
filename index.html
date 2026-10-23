@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HAEditor — Hybrid Raster (GIMP) &amp; Vector (Inkscape) Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app-root"></div>
+  <script>
+    (function () {
+      try {
+        if (window.location.protocol === 'chrome-extension:' && typeof nw !== 'undefined' && nw.Window && nw.Window.get) {
+          const win = nw.Window.get();
+          win.show();
+          win.focus();
+        }
+      } catch (_e) {}
+
+      const fs = require('fs');
+      const path = require('path');
+      const startDir = (typeof nw !== 'undefined' && nw.App && nw.App.startPath) ? nw.App.startPath : process.cwd();
+      const candidates = [
+        path.resolve(startDir, 'dist/src/haeditor-app.js'),
+        path.resolve(process.cwd(), 'dist/src/haeditor-app.js'),
+        path.resolve(process.cwd(), '../dist/src/haeditor-app.js')
+      ];
+      const appPath = candidates.find((p) => fs.existsSync(p)) || './dist/src/haeditor-app.js';
+      const projectRoot = path.dirname(path.dirname(path.dirname(appPath)));
+      require(appPath).startHaEditorApp(window, projectRoot);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1634 @@
+:root {
+  --ha-bg-darkest: #0f111a;
+  --ha-bg-panel: #181b28;
+  --ha-bg-card: #212536;
+  --ha-bg-hover: #2b3046;
+  --ha-border: #2f354d;
+  --ha-accent: #00d4ff;
+  --ha-accent-gold: #ffab00;
+  --ha-danger: #ff4d6d;
+  --ha-text: #e4e8f7;
+  --ha-text-muted: #8f96b2;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html, body, #app-root {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--ha-bg-darkest);
+  color: var(--ha-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+}
+
+.ha-hidden {
+  display: none !important;
+}
+
+.ha-editor-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Top Menu & Tool Options */
+.ha-top-bars-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: var(--ha-bg-panel);
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-top-menubar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  gap: 4px;
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-brand-logo {
+  font-weight: 700;
+  color: var(--ha-accent);
+  margin-right: 12px;
+  letter-spacing: 0.4px;
+}
+
+.ha-menu-item-btn {
+  background: transparent;
+  color: var(--ha-text);
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ha-menu-item-btn:hover,
+.ha-menu-item-btn.active-menu-open {
+  background: var(--ha-bg-hover);
+  color: var(--ha-accent);
+}
+
+.ha-menubar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ha-zoom-badge {
+  font-family: monospace;
+  color: var(--ha-accent);
+  min-width: 44px;
+  text-align: center;
+}
+
+.ha-tool-options-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 36px;
+  padding: 4px 10px;
+  gap: 12px;
+  background: #141722;
+}
+
+.ha-active-tool-badge {
+  font-weight: 600;
+  color: var(--ha-accent);
+  padding-right: 10px;
+  border-right: 1px solid var(--ha-border);
+}
+
+.ha-tool-opt-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ha-tool-opt-label {
+  color: var(--ha-text-muted);
+}
+
+.ha-tool-options-bool-group {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+/* Main Workspace Row */
+.ha-shell-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left GIMP/Inkscape Toolbox */
+.ha-shell-left {
+  width: 96px;
+  background: var(--ha-bg-panel);
+  border-right: 1px solid var(--ha-border);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.ha-toolbox-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ha-text-muted);
+  margin: 6px 0 4px 0;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.ha-toolbox-layer-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 6px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--ha-border);
+}
+
+.ha-toolbox-layer-badge.vector {
+  background: rgba(0, 212, 255, 0.12);
+  color: var(--ha-accent);
+  border-color: rgba(0, 212, 255, 0.35);
+}
+
+.ha-toolbox-layer-badge.raster {
+  background: rgba(255, 171, 0, 0.12);
+  color: var(--ha-accent-gold);
+  border-color: rgba(255, 171, 0, 0.35);
+}
+
+.ha-toolbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.ha-tool-btn {
+  height: 34px;
+  background: var(--ha-bg-card);
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  color: var(--ha-text);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ha-tool-btn:hover {
+  background: var(--ha-bg-hover);
+}
+
+.ha-tool-btn.active {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: var(--ha-accent);
+  box-shadow: 0 0 0 1px var(--ha-accent);
+}
+
+.ha-color-swatch-box {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--ha-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ha-swatch-fg, .ha-swatch-bg {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* Center Viewport & Timeline */
+.ha-shell-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ha-bg-darkest);
+}
+
+.ha-shell-viewport-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-viewport-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-viewport-tabs-bar {
+  display: flex;
+  align-items: center;
+  background: #141722;
+  border-bottom: 1px solid var(--ha-border);
+  padding: 4px 8px 0 8px;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.ha-viewport-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ha-bg-card);
+  color: var(--ha-text-muted);
+  border: 1px solid var(--ha-border);
+  border-bottom: none;
+  padding: 5px 12px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ha-viewport-tab.active {
+  background: var(--ha-bg-panel);
+  color: var(--ha-accent);
+  font-weight: 600;
+  border-color: var(--ha-accent);
+}
+
+.ha-tab-close {
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0 3px;
+}
+
+.ha-tab-close:hover {
+  color: var(--ha-danger);
+}
+
+.ha-viewport-mode-banner {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-viewport-mode-banner.active.in-place {
+  display: flex;
+  background: rgba(0, 212, 255, 0.14);
+  color: var(--ha-accent);
+}
+
+.ha-viewport-mode-banner.active.isolated-tab {
+  display: flex;
+  background: rgba(255, 171, 0, 0.14);
+  color: var(--ha-accent-gold);
+}
+
+.ha-banner-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ha-viewport-scroll-area {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-image:
+    linear-gradient(45deg, #151824 25%, transparent 25%),
+    linear-gradient(-45deg, #151824 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #151824 75%),
+    linear-gradient(-45deg, transparent 75%, #151824 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+/* HACanvas Splash Screen */
+.ha-splash-screen {
+  width: 100%;
+  max-width: 780px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.ha-splash-card {
+  width: 100%;
+  background: linear-gradient(155deg, rgba(24, 27, 40, 0.98), rgba(15, 17, 26, 0.98));
+  border: 1px solid var(--ha-border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ha-splash-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.ha-splash-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.ha-splash-title {
+  margin: 4px 0 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ha-text);
+  letter-spacing: 0.3px;
+}
+
+.ha-splash-subtitle {
+  margin: 0;
+  max-width: 640px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ha-text-muted);
+}
+
+.ha-splash-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.ha-splash-action-btn {
+  min-width: 150px;
+  padding: 10px 22px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+}
+
+.ha-splash-features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.ha-splash-feature-card {
+  background: var(--ha-bg-card);
+  border: 1px solid var(--ha-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ha-splash-feature-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ha-accent);
+}
+
+.ha-splash-feature-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ha-text-muted);
+}
+
+.ha-canvas-stage-wrapper {
+  position: relative;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.65);
+  border: 1px solid var(--ha-border);
+}
+
+.ha-display-canvas, .ha-overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.ha-overlay-canvas {
+  z-index: 2;
+  cursor: crosshair;
+}
+
+/* Right Dock Panels */
+.ha-shell-right-dock {
+  width: 330px;
+  background: var(--ha-bg-panel);
+  border-left: 1px solid var(--ha-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-dock-panel {
+  border-bottom: 1px solid var(--ha-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: #141722;
+  cursor: pointer;
+}
+
+.ha-dock-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--ha-text);
+}
+
+.ha-dock-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ha-dock-btn {
+  background: var(--ha-bg-card);
+  color: var(--ha-accent);
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ha-dock-btn:hover {
+  background: var(--ha-bg-hover);
+}
+
+.ha-dock-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Category Folder Tree & Shared Object Cards */
+.ha-tree-search-input {
+  width: 100%;
+}
+
+.ha-category-tree-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.ha-category-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ha-category-folder-header:hover {
+  background: var(--ha-bg-hover);
+}
+
+.ha-folder-count {
+  margin-left: auto;
+  font-size: 10px;
+  background: var(--ha-bg-card);
+  padding: 1px 5px;
+  border-radius: 8px;
+  color: var(--ha-text-muted);
+}
+
+.ha-category-folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+  margin-top: 3px;
+}
+
+.ha-shared-obj-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: var(--ha-bg-card);
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ha-shared-obj-card:hover {
+  background: var(--ha-bg-hover);
+}
+
+.ha-shared-obj-card.active {
+  border-color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.ha-shared-obj-thumb {
+  width: 38px;
+  height: 38px;
+  background: #10121b;
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ha-shared-obj-img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.ha-shared-obj-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.ha-shared-obj-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-shared-obj-sub {
+  font-size: 10px;
+  color: var(--ha-text-muted);
+}
+
+.ha-shared-obj-badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.ha-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #141722;
+  color: var(--ha-accent);
+  border: 1px solid var(--ha-border);
+}
+
+/* Layers List */
+.ha-layer-controls-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ha-layers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.ha-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--ha-bg-card);
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ha-layer-row.active {
+  border-color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.14);
+}
+
+.ha-layer-type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.ha-layer-type-badge.vector {
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--ha-accent);
+}
+
+.ha-layer-type-badge.raster {
+  background: rgba(255, 171, 0, 0.2);
+  color: var(--ha-accent-gold);
+}
+
+.ha-layer-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-layer-meta {
+  font-size: 10px;
+  color: var(--ha-text-muted);
+}
+
+/* Filters Grid */
+.ha-filter-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.ha-filter-chip {
+  background: var(--ha-bg-card);
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ha-filter-chip.active {
+  border-color: var(--ha-accent);
+  color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.14);
+}
+
+.ha-filter-params-form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.ha-param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Timeline Strip */
+.ha-shell-timeline-host {
+  background: var(--ha-bg-panel);
+  border-top: 1px solid var(--ha-border);
+}
+
+.ha-timeline-strip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.ha-timeline-frame-cell {
+  min-width: 28px;
+  height: 26px;
+  background: var(--ha-bg-card);
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ha-timeline-frame-cell.active {
+  border-color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--ha-accent);
+  font-weight: 700;
+}
+
+.ha-timeline-frame-cell.has-keyframe {
+  border-bottom: 3px solid var(--ha-accent-gold);
+}
+
+/* Status Bar */
+.ha-status-bar {
+  height: 24px;
+  background: #12141f;
+  border-top: 1px solid var(--ha-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--ha-text-muted);
+}
+
+/* Custom Context Menu */
+.ha-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 230px;
+  background: #1b1f2e;
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+  padding: 4px 0;
+}
+
+.ha-context-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+}
+
+.ha-context-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--ha-text);
+}
+
+.ha-context-menu-item:hover,
+.ha-context-menu-item.submenu-open {
+  background: var(--ha-bg-hover);
+}
+
+.ha-context-menu-item.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ha-context-menu-item.disabled:hover {
+  background: transparent;
+}
+
+.ha-context-menu-item.danger {
+  color: var(--ha-danger);
+}
+
+.ha-context-menu-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ha-context-menu-shortcut {
+  color: var(--ha-text-muted);
+  font-size: 11px;
+  margin-left: 16px;
+}
+
+.ha-context-menu-divider {
+  height: 1px;
+  background: var(--ha-border);
+  margin: 4px 0;
+}
+
+/* Modal Dialog */
+.ha-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ha-modal-card {
+  background: var(--ha-bg-panel);
+  border: 1px solid var(--ha-border);
+  border-radius: 8px;
+  width: 400px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.ha-modal-header {
+  padding: 12px 16px;
+  background: #141722;
+  font-weight: 700;
+  color: var(--ha-accent);
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-modal-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ha-modal-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ha-modal-footer {
+  padding: 10px 16px;
+  background: #141722;
+  border-top: 1px solid var(--ha-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Inputs & Buttons */
+.ha-input, .ha-select {
+  background: #10131d;
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+
+.ha-tool-num-input {
+  width: 58px;
+}
+
+.ha-btn {
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ha-btn-primary {
+  background: var(--ha-accent);
+  color: #0b0e17;
+  border-color: var(--ha-accent);
+}
+
+.ha-btn-secondary {
+  background: var(--ha-bg-card);
+  color: var(--ha-text);
+}
+
+.ha-btn-sm {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.ha-btn-block {
+  width: 100%;
+}
+
+.ha-icon-btn {
+  background: transparent;
+  color: var(--ha-text);
+  border: none;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.ha-icon-btn:hover {
+  background: var(--ha-bg-hover);
+}
+
+.ha-empty-hint {
+  color: var(--ha-text-muted);
+  font-style: italic;
+  padding: 8px 4px;
+  line-height: 1.4;
+}
+
+/* Rich Form Controls & GIMP File Browser Modal */
+.ha-modal-card {
+  width: 520px;
+  max-width: 94vw;
+}
+
+.ha-file-browser-card {
+  width: 780px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+}
+
+.ha-fb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ha-modal-subtitle-banner {
+  background: rgba(0, 212, 255, 0.08);
+  border-bottom: 1px solid var(--ha-border);
+  color: #b8c6db;
+  font-size: 11.5px;
+  padding: 8px 16px;
+  line-height: 1.4;
+}
+
+.ha-modal-presets-box {
+  background: #141824;
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ha-modal-presets-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ha-text-muted);
+  letter-spacing: 0.4px;
+}
+
+.ha-modal-presets-row,
+.ha-modal-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ha-modal-preset-pill,
+.ha-modal-chip-btn {
+  background: var(--ha-bg-card);
+  color: var(--ha-text);
+  border: 1px solid var(--ha-border);
+  border-radius: 14px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.ha-modal-preset-pill:hover,
+.ha-modal-chip-btn:hover {
+  border-color: var(--ha-accent);
+  color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.ha-modal-field-desc {
+  font-size: 11px;
+  color: var(--ha-text-muted);
+  margin-bottom: 2px;
+}
+
+.ha-modal-color-row,
+.ha-modal-number-row,
+.ha-param-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ha-modal-color-swatch {
+  width: 38px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--ha-border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.ha-modal-range,
+.ha-param-range {
+  flex: 1;
+  accent-color: var(--ha-accent);
+}
+
+.ha-modal-num-box {
+  width: 82px;
+}
+
+.ha-param-input {
+  width: 58px;
+}
+
+/* File Browser Layout */
+.ha-fb-navbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #171a27;
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-fb-path-input {
+  flex: 1;
+  font-family: Consolas, monospace;
+}
+
+.ha-fb-split-body {
+  display: flex;
+  height: 320px;
+  border-bottom: 1px solid var(--ha-border);
+}
+
+.ha-fb-places {
+  width: 175px;
+  background: #131622;
+  border-right: 1px solid var(--ha-border);
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.ha-fb-places-header {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ha-text-muted);
+  padding: 2px 8px 4px;
+  letter-spacing: 0.5px;
+}
+
+.ha-fb-place-btn {
+  background: transparent;
+  color: var(--ha-text);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 5px 8px;
+  text-align: left;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-fb-place-btn:hover {
+  background: var(--ha-bg-hover);
+  border-color: var(--ha-border);
+  color: var(--ha-accent);
+}
+
+.ha-fb-table-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #0f121c;
+  min-width: 0;
+}
+
+.ha-fb-table-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #161a28;
+  border-bottom: 1px solid var(--ha-border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ha-text-muted);
+}
+
+.ha-fb-file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.ha-fb-row {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  user-select: none;
+}
+
+.ha-fb-row:hover {
+  background: rgba(0, 212, 255, 0.09);
+}
+
+.ha-fb-row.selected {
+  background: rgba(0, 212, 255, 0.22);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.ha-fb-row-dir .ha-fb-col-name {
+  color: #ffd166;
+  font-weight: 600;
+}
+
+.ha-fb-col-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;
+}
+
+.ha-fb-col-type {
+  width: 90px;
+  font-size: 11px;
+  color: var(--ha-text-muted);
+}
+
+.ha-fb-col-size {
+  width: 80px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--ha-text-muted);
+  font-family: Consolas, monospace;
+}
+
+.ha-fb-empty-msg {
+  padding: 24px 16px;
+  color: var(--ha-text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.ha-fb-bottom-area {
+  background: #151926;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.ha-fb-control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.ha-fb-control-label {
+  width: 95px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ha-text-muted);
+}
+
+.ha-fb-filename-input,
+.ha-fb-filter-select {
+  flex: 1;
+}
+
+.ha-fb-footer {
+  margin-top: 4px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ha-fb-status-info {
+  font-size: 11px;
+  color: var(--ha-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 460px;
+}
+
+.ha-fb-btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* ============================================================================
+   AI Studio Assistant Panel (LM Studio @ localhost:1234)
+   ============================================================================ */
+.ha-shell-right-dock {
+  width: 356px;
+}
+
+.ha-ai-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ha-ai-connection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #121622;
+  border: 1px solid var(--ha-border);
+  border-radius: 5px;
+  padding: 4px 8px;
+}
+
+.ha-ai-conn-badge {
+  font-size: 10.5px;
+  color: #7ee787;
+  font-family: Consolas, monospace;
+}
+
+.ha-ai-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ha-ai-chip-btn {
+  background: #171c2b;
+  color: #c8d3e6;
+  border: 1px solid var(--ha-border);
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.ha-ai-chip-btn:hover {
+  border-color: var(--ha-accent);
+  color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.ha-ai-chat-container {
+  height: 220px;
+  overflow-y: auto;
+  background: #0d1018;
+  border: 1px solid var(--ha-border);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ha-ai-bubble {
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.42;
+  word-break: break-word;
+}
+
+.ha-ai-bubble-user {
+  align-self: flex-end;
+  max-width: 88%;
+  background: rgba(0, 212, 255, 0.18);
+  border: 1px solid rgba(0, 212, 255, 0.45);
+  color: #ffffff;
+}
+
+.ha-ai-user-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 3px;
+}
+
+.ha-ai-mode-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.ha-ai-mode-pill.mode-fast {
+  background: rgba(0, 212, 255, 0.25);
+  color: #00e5ff;
+}
+
+.ha-ai-mode-pill.mode-reasoning {
+  background: rgba(189, 147, 249, 0.25);
+  color: #d6b4fc;
+}
+
+.ha-ai-bubble-assistant {
+  align-self: flex-start;
+  max-width: 94%;
+  background: #181c2b;
+  border: 1px solid var(--ha-border);
+  color: var(--ha-text);
+}
+
+.ha-ai-bubble-title {
+  font-weight: 700;
+  color: var(--ha-accent);
+  margin-bottom: 3px;
+}
+
+.ha-ai-thinking-bubble {
+  align-self: flex-start;
+  width: 96%;
+  background: #141826;
+  border: 1px dashed #394466;
+  color: #aab6cc;
+  opacity: 0.78;
+}
+
+.ha-ai-status-row,
+.ha-ai-tool-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+}
+
+.reasoning-container {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 2px solid #bd93f9;
+  border-radius: 4px;
+  font-family: Consolas, monospace;
+  font-size: 10.5px;
+  color: #9aa7c2;
+  max-height: 110px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.ha-ai-tool-bubble {
+  align-self: flex-start;
+  width: 96%;
+  background: #131929;
+  border: 1px solid #2b3a59;
+  color: #d2dff2;
+}
+
+.ha-ai-tool-bubble.streaming {
+  border-color: var(--ha-accent);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.ha-ai-tool-bubble.completed {
+  border-color: rgba(46, 160, 67, 0.55);
+  background: rgba(46, 160, 67, 0.1);
+}
+
+.ha-ai-tool-bubble.completed .ha-ai-spinner {
+  display: none;
+}
+
+.ha-ai-tool-bubble.failed {
+  border-color: rgba(248, 81, 73, 0.6);
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.ha-ai-tool-bubble.failed .ha-ai-spinner {
+  display: none;
+}
+
+.tool-args-live-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.ha-ai-arg-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: Consolas, monospace;
+  color: #9ecbff;
+}
+
+.ha-ai-snapshot-preview {
+  margin-top: 6px;
+}
+
+.ha-ai-snapshot-img {
+  max-width: 100%;
+  max-height: 110px;
+  border-radius: 4px;
+  border: 1px solid var(--ha-border);
+}
+
+.ha-ai-bubble-error {
+  align-self: flex-start;
+  width: 96%;
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid rgba(248, 81, 73, 0.55);
+  color: #ff9492;
+}
+
+.ha-ai-error-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.ha-ai-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 212, 255, 0.25);
+  border-top-color: var(--ha-accent);
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: ha-spin 0.75s linear infinite;
+}
+
+@keyframes ha-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ha-ai-chat-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+}
+
+.ha-ai-chat-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ha-ai-send-btn {
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+.ha-ai-brain-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ha-ai-brain-btn {
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(189, 147, 249, 0.16);
+  border-color: rgba(189, 147, 249, 0.45);
+  color: #e2c9ff;
+}
+
+.ha-ai-brain-btn:hover {
+  background: rgba(189, 147, 249, 0.28);
+  border-color: #bd93f9;
+}
+
+.ha-ai-brain-level-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ha-ai-brain-dropdown {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  width: 265px;
+  background: #141826;
+  border: 1px solid #48547a;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 9999;
+}
+
+.ha-ai-brain-dropdown-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #bd93f9;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--ha-border);
+  margin-bottom: 2px;
+}
+
+.ha-ai-brain-option {
+  background: #1a2033;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ha-text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: all 0.12s ease;
+}
+
+.ha-ai-brain-option:hover {
+  background: #232b45;
+  border-color: #bd93f9;
+}
+
+.ha-ai-brain-option.active {
+  background: rgba(189, 147, 249, 0.18);
+  border-color: #bd93f9;
+}
+
+.ha-ai-brain-opt-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ha-ai-brain-opt-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ha-ai-brain-opt-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.ha-ai-brain-opt-badge.level-low {
+  background: rgba(0, 212, 255, 0.2);
+  color: #00e5ff;
+}
+
+.ha-ai-brain-opt-badge.level-medium {
+  background: rgba(255, 209, 102, 0.2);
+  color: #ffd166;
+}
+
+.ha-ai-brain-opt-badge.level-max {
+  background: rgba(255, 51, 102, 0.25);
+  color: #ff6b8b;
+}
+
+.ha-ai-brain-opt-desc {
+  font-size: 10px;
+  color: var(--ha-text-muted);
+}
+
+.ha-ai-code-block {
+  background: #090c12;
+  padding: 6px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: Consolas, monospace;
+  font-size: 10.5px;
+  margin: 4px 0;
+}
+
+.ha-ai-inline-code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: Consolas, monospace;
+}
